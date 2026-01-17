@@ -1,0 +1,100 @@
+flowchart TB
+    subgraph Entry["📞 Customer Entry Points"]
+        Voice["🎤 Voice Channel"]
+        Chat["💬 Chat Channel"]
+    end
+
+    subgraph Routing["🔀 Call Routing Layer"]
+        Router["Call Router"]
+        Queue["Session Queue"]
+    end
+
+    subgraph Agents["🤖 Autonomous AI Agents"]
+        Primary["Primary Interaction Agent"]
+        Supervisor["Supervisor Agent"]
+        Escalation["Escalation Agent"]
+    end
+
+    subgraph Memory["🧠 Memory & Context"]
+        Context["Context Memory"]
+        Knowledge["Knowledge Base"]
+        Profile["Customer Profile"]
+    end
+
+    subgraph Analytics["📊 Analytics & Monitoring"]
+        Engine["Analytics Engine"]
+        Audit["Audit Trail"]
+        Metrics["Performance Metrics"]
+    end
+
+    subgraph Integration["🔌 Enterprise Integration"]
+        CRM["CRM System"]
+        Orders["Order Management"]
+        Scheduling["Scheduling Service"]
+    end
+
+    subgraph Fallback["👤 Human Fallback"]
+        HumanAgent["Human Agent"]
+        Dashboard["Agent Dashboard"]
+    end
+
+    %% Customer Entry Flow
+    Voice -->|"Audio Stream"| Router
+    Chat -->|"Text Message"| Router
+
+    %% Routing to Agents
+    Router -->|"Route Session"| Queue
+    Queue -->|"Assign"| Primary
+
+    %% Primary Agent Interactions
+    Primary <-->|"Retrieve/Store"| Context
+    Primary <-->|"Query"| Knowledge
+    Primary <-->|"Lookup"| Profile
+    Primary -->|"Monitor"| Supervisor
+
+    %% Supervisor Oversight
+    Supervisor -->|"Quality Check"| Primary
+    Supervisor -->|"Trigger"| Escalation
+
+    %% Escalation Flow
+    Primary -->|"Escalation Needed"| Escalation
+    Escalation -->|"Prepare Handoff"| Context
+    Escalation -->|"Transfer with Context"| HumanAgent
+
+    %% Human Agent Support
+    HumanAgent <-->|"View Context"| Dashboard
+    Dashboard <-->|"Access"| Context
+
+    %% Enterprise Integration
+    Primary <-->|"Execute Workflows"| CRM
+    Primary <-->|"Check Status"| Orders
+    Primary <-->|"Book/Modify"| Scheduling
+
+    %% Analytics Flow
+    Primary -.->|"Log Events"| Engine
+    Supervisor -.->|"Log Decisions"| Engine
+    Escalation -.->|"Log Transfers"| Engine
+    Engine -->|"Store"| Audit
+    Engine -->|"Calculate"| Metrics
+
+    %% Response Flow
+    Primary -->|"Response"| Router
+    Router -->|"Audio Response"| Voice
+    Router -->|"Text Response"| Chat
+
+    %% Styling
+    classDef entryPoint fill:#4CAF50,stroke:#2E7D32,color:#fff
+    classDef routing fill:#2196F3,stroke:#1565C0,color:#fff
+    classDef agent fill:#9C27B0,stroke:#6A1B9A,color:#fff
+    classDef memory fill:#FF9800,stroke:#E65100,color:#fff
+    classDef analytics fill:#607D8B,stroke:#37474F,color:#fff
+    classDef integration fill:#00BCD4,stroke:#00838F,color:#fff
+    classDef human fill:#F44336,stroke:#C62828,color:#fff
+
+    class Voice,Chat entryPoint
+    class Router,Queue routing
+    class Primary,Supervisor,Escalation agent
+    class Context,Knowledge,Profile memory
+    class Engine,Audit,Metrics analytics
+    class CRM,Orders,Scheduling integration
+    class HumanAgent,Dashboard human

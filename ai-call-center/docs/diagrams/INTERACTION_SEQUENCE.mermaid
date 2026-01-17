@@ -1,0 +1,122 @@
+sequenceDiagram
+    autonumber
+    
+    participant C as 👤 Customer
+    participant I as 🎤 Interaction Layer
+    participant R as 🔀 Call Router
+    participant P as 🤖 Primary Agent
+    participant S as 👁️ Supervisor Agent
+    participant M as 🧠 Context Memory
+    participant E as 🚨 Escalation Agent
+    participant H as 👨‍💼 Human Agent
+    participant A as 📊 Analytics
+
+    %% Session Initiation
+    rect rgb(200, 230, 200)
+        Note over C,R: Session Initiation
+        C->>I: Initiates Call/Chat
+        I->>R: New Session Request
+        R->>R: Create Session
+        R->>P: Assign Session
+        R-->>A: Log: Session Started
+    end
+
+    %% AI Disclosure & Initial Engagement
+    rect rgb(200, 220, 240)
+        Note over P,M: Initial Engagement
+        P->>M: Load Customer Profile
+        M-->>P: Profile Data
+        P->>I: AI Disclosure + Greeting
+        I->>C: "Hello, I'm an AI assistant..."
+        C->>I: States Request
+        I->>P: Customer Utterance
+    end
+
+    %% Processing Loop with Parallel Supervision
+    rect rgb(240, 230, 200)
+        Note over P,S: Processing with Parallel Supervision
+        
+        P->>P: Detect Intent
+        P->>P: Score Confidence
+        
+        par Parallel Operations
+            P->>M: Retrieve Context
+            M-->>P: Relevant Context
+        and
+            P-->>S: Stream: Turn Event
+            S->>S: Analyze Quality
+            S->>S: Check Policy
+        end
+        
+        P->>P: Plan Response
+        P->>P: Apply Guardrails
+        
+        alt Supervisor Advisory Needed
+            S-->>P: Advisory Message
+            P->>P: Incorporate Guidance
+        end
+        
+        P->>I: Generated Response
+        I->>C: Delivers Response
+        P-->>A: Log: Turn Complete
+    end
+
+    %% Resolution Attempt
+    rect rgb(230, 220, 240)
+        Note over P,M: Resolution Attempt
+        C->>I: Follow-up / Confirmation
+        I->>P: Customer Response
+        
+        P->>P: Evaluate Progress
+        
+        alt Resolution Successful
+            P->>M: Store Resolution
+            P->>I: Confirmation Message
+            I->>C: "Your request is complete..."
+            P-->>A: Log: Resolved by AI
+        else Escalation Needed
+            P->>S: Request Escalation Approval
+            S->>S: Validate Escalation
+            S-->>P: Confirm Escalation
+            P->>E: Trigger Escalation
+        end
+    end
+
+    %% Escalation Flow
+    rect rgb(250, 210, 210)
+        Note over E,H: Escalation & Handoff
+        E->>M: Compile Context Package
+        M-->>E: Conversation Summary
+        E->>E: Match Human Agent
+        E->>R: Request Transfer
+        R->>H: Assign Session + Context
+        
+        P->>I: "Connecting you with a specialist..."
+        I->>C: Transfer Announcement
+        
+        E->>H: Deliver Context Package
+        H->>I: Human Agent Greeting
+        I->>C: "Hi, I'm [Agent]. I see you need help with..."
+        
+        E-->>A: Log: Escalation Complete
+    end
+
+    %% Human Resolution
+    rect rgb(220, 240, 220)
+        Note over H,C: Human Resolution
+        C->>I: Continues with Human
+        I->>H: Customer Message
+        H->>H: Resolve Issue
+        H->>I: Resolution Response
+        I->>C: Issue Resolved
+        H-->>A: Log: Resolved by Human
+    end
+
+    %% Session Closure
+    rect rgb(230, 230, 230)
+        Note over R,A: Session Closure
+        R->>R: Close Session
+        R-->>A: Log: Session Complete
+        A->>A: Calculate Metrics
+        A->>A: Update Dashboards
+    end

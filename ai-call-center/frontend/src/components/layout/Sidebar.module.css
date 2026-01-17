@@ -1,0 +1,129 @@
+.sidebar {
+  width: 260px;
+  background-color: var(--color-bg-secondary);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-lg);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  margin-bottom: var(--space-xl);
+}
+
+.logoIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-lg);
+  background: var(--gradient-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  box-shadow: var(--shadow-glow);
+}
+
+.logoText {
+  display: flex;
+  flex-direction: column;
+}
+
+.logoTitle {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--color-text-primary);
+}
+
+.logoSubtitle {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.navItem:hover:not(.disabled) {
+  background-color: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.navItem.active {
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-accent-primary);
+  box-shadow: inset 3px 0 0 var(--color-accent-primary);
+}
+
+.navItem.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.badge {
+  margin-left: auto;
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  background-color: var(--color-bg-tertiary);
+  border-radius: var(--radius-full);
+  color: var(--color-text-muted);
+}
+
+.footer {
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--color-border);
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--color-accent-success);
+  box-shadow: 0 0 8px var(--color-accent-success);
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    width: 100%;
+    flex-direction: row;
+    padding: var(--space-md);
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+  }
+  
+  .nav {
+    flex-direction: row;
+    overflow-x: auto;
+  }
+  
+  .logo, .footer {
+    display: none;
+  }
+}
