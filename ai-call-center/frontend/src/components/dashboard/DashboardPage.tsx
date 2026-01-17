@@ -59,6 +59,10 @@ export function DashboardPage() {
     const result = await fetchAnalytics()
     
     if (result.success && result.data) {
+      // Extract hourly counts from API response
+      const hourlyData = result.data.callsPerHour || []
+      const callsPerHour = hourlyData.map(item => item.count)
+      
       setAnalytics({
         totalInteractions: result.data.totalInteractions,
         activeInteractions: result.data.activeInteractions,
@@ -66,9 +70,9 @@ export function DashboardPage() {
         escalationRate: result.data.escalationRate,
         averageConfidence: result.data.averageConfidence,
         averageCsat: result.data.averageCsat,
-        averageDuration: 142, // Would come from API
+        averageDuration: result.data.averageResolutionTime || 0,
         trends: {
-          callsPerHour: [12, 18, 24, 32, 28, 35, 42, 38, 45, 52, 48, 44],
+          callsPerHour: callsPerHour.length > 0 ? callsPerHour : [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
           resolutionTrend: 3,
           escalationTrend: -2,
         }

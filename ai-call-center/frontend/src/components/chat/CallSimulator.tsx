@@ -84,6 +84,7 @@ export function CallSimulator() {
     isSupported: isSTTSupported,
     transcript,
     interimTranscript,
+    finalTranscript,
     error: speechError,
     permissionDenied,
     startListening,
@@ -99,6 +100,7 @@ export function CallSimulator() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const lastTranscriptRef = useRef<string>('')
+  const lastInterimRef = useRef<string>('')
 
   // ---------------------------------------------------------------------------
   // Effects
@@ -137,18 +139,12 @@ export function CallSimulator() {
     }
   }, [speechError, permissionDenied])
 
-  // Auto-send transcribed text when speech ends
+  // Track interim transcript for fallback
   useEffect(() => {
-    if (!isListening && transcript && transcript !== lastTranscriptRef.current) {
-      lastTranscriptRef.current = transcript
-      
-      // Set the transcript as input and send
-      if (transcript.trim() && isCallActive && callId) {
-        handleVoiceMessage(transcript.trim())
-        clearTranscript()
-      }
+    if (interimTranscript) {
+      lastInterimRef.current = interimTranscript
     }
-  }, [isListening, transcript, isCallActive, callId])
+  }, [interimTranscript])
 
   // Stop TTS when call ends
   useEffect(() => {
@@ -251,10 +247,15 @@ export function CallSimulator() {
 
   // Handle voice message (from speech recognition)
   const handleVoiceMessage = useCallback(async (voiceText: string) => {
+    console.log('[handleVoiceMessage] Called with:', voiceText)
+    console.log('[handleVoiceMessage] isCallActive:', isCallActive, 'callId:', callId, 'status:', agentState.status)
+    
     if (!voiceText.trim() || !isCallActive || !callId || agentState.status === 'processing') {
+      console.log('[handleVoiceMessage] ❌ Early return - conditions not met')
       return
     }
 
+    console.log('[handleVoiceMessage] ✅ Proceeding with API call')
     setError(null)
     
     // Add customer message
@@ -270,12 +271,15 @@ export function CallSimulator() {
     const startTime = Date.now()
 
     // Call API
+    console.log('[handleVoiceMessage] Calling sendMessage API...')
     const result = await sendMessage(callId, voiceText)
+    console.log('[handleVoiceMessage] API Response:', result)
     
     const processingTime = Date.now() - startTime
     setIsLoading(false)
 
     if (result.success && result.data) {
+      console.log('[handleVoiceMessage] ✅ Success! Response content:', result.data.responseContent)
       const data = result.data
       const confidenceLevel = getConfidenceLevel(data.confidenceLevel)
       const confidenceScore = getConfidenceScore(data.confidenceLevel)
@@ -328,6 +332,38 @@ export function CallSimulator() {
       })
     }
   }, [callId, isCallActive, agentState.status, addMessage, speakResponse])
+
+  // Auto-send transcribed text when speech ends
+  useEffect(() => {
+    console.log('[Speech Effect] isListening:', isListening, 'transcript:', transcript, 'finalTranscript:', finalTranscript, 'lastInterim:', lastInterimRef.current)
+    
+    if (!isListening) {
+      // Use finalTranscript, or fall back to transcript, or last interim
+      const textToSend = (finalTranscript || transcript || lastInterimRef.current).trim()
+      
+      console.log('[Speech Effect] textToSend:', textToSend, 'lastRef:', lastTranscriptRef.current)
+      
+      if (textToSend && textToSend !== lastTranscriptRef.current) {
+        lastTranscriptRef.current = textToSend
+        
+        console.log('[Speech Effect] Conditions - isCallActive:', isCallActive, 'callId:', callId, 'status:', agentState.status)
+        
+        // Add a small delay to ensure all state is settled
+        const timer = setTimeout(() => {
+          if (isCallActive && callId && agentState.status !== 'processing') {
+            console.log('[Speech Effect] ✅ Sending voice message:', textToSend)
+            handleVoiceMessage(textToSend)
+          } else {
+            console.log('[Speech Effect] ❌ Not sending - conditions not met')
+          }
+          clearTranscript()
+          lastInterimRef.current = ''
+        }, 150)
+        
+        return () => clearTimeout(timer)
+      }
+    }
+  }, [isListening, transcript, finalTranscript, isCallActive, callId, agentState.status, handleVoiceMessage, clearTranscript])
 
   // ---------------------------------------------------------------------------
   // API Handlers

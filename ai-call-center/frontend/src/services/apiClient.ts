@@ -86,26 +86,20 @@ export interface EndCallResponse {
   resolutionStatus: 'resolved' | 'escalated' | 'abandoned'
 }
 
+export interface CallsPerHourItem {
+  hour: number
+  count: number
+}
+
 export interface AnalyticsResponse {
-  summary: {
-    totalCalls: number
-    activeCalls: number
-    resolvedCalls: number
-    escalatedCalls: number
-    averageCallDuration: number
-    averageConfidence: number
-    averageCsat: number
-  }
-  trends: {
-    callsPerHour: number[]
-    resolutionRate: number
-    escalationRate: number
-  }
-  agentPerformance: {
-    primaryAgent: { avgConfidence: number; avgResponseTime: number }
-    supervisorAgent: { reviewCount: number; adjustmentRate: number }
-    escalationAgent: { escalationCount: number; avgPriority: number }
-  }
+  totalInteractions: number
+  activeInteractions: number
+  resolutionRate: number
+  escalationRate: number
+  averageConfidence: number
+  averageCsat: number
+  averageResolutionTime: number
+  callsPerHour: CallsPerHourItem[]
 }
 
 // -----------------------------------------------------------------------------
@@ -299,7 +293,7 @@ class ApiClient {
    * Fetch analytics data.
    */
   async fetchAnalytics(): Promise<ApiResult<AnalyticsResponse>> {
-    return this.request<AnalyticsResponse>('GET', '/api/analytics')
+    return this.request<AnalyticsResponse>('GET', '/api/analytics/metrics')
   }
 
   /**

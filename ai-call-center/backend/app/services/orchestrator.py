@@ -137,6 +137,22 @@ class InteractionState(BaseModel):
 
 
 # -----------------------------------------------------------------------------
+# Helper Functions
+# -----------------------------------------------------------------------------
+
+def _score_to_confidence_level(score: float) -> ConfidenceLevel:
+    """Convert numeric confidence score to confidence level."""
+    if score >= 0.8:
+        return ConfidenceLevel.HIGH
+    elif score >= 0.6:
+        return ConfidenceLevel.MEDIUM
+    elif score >= 0.4:
+        return ConfidenceLevel.LOW
+    else:
+        return ConfidenceLevel.UNCERTAIN
+
+
+# -----------------------------------------------------------------------------
 # Call Orchestrator
 # -----------------------------------------------------------------------------
 
@@ -405,7 +421,7 @@ class CallOrchestrator:
                 agent_type="supervisor",
                 decision_type="approved" if supervisor_review.approved else "flagged",
                 confidence=supervisor_review.adjusted_confidence,
-                confidence_level=supervisor_review.adjusted_confidence_level.value,
+                confidence_level=_score_to_confidence_level(supervisor_review.adjusted_confidence).value,
                 processing_time_ms=supervisor_duration,
                 details={
                     "approved": supervisor_review.approved,
@@ -430,18 +446,20 @@ class CallOrchestrator:
             phases_completed.append(OrchestrationPhase.ESCALATION_EVALUATION)
             
             # Step 13: Persist escalation decision
+            # Use supervisor's adjusted confidence for escalation decision
+            escalation_confidence = supervisor_review.adjusted_confidence
             self._persist_agent_decision(
                 interaction_id=interaction_id,
                 message_id=customer_message.message_id,
                 agent_type="escalation",
                 decision_type=escalation_decision.escalation_type.value if escalation_decision.escalation_type else "none",
-                confidence=escalation_decision.confidence,
-                confidence_level=escalation_decision.confidence_level.value,
+                confidence=escalation_confidence,
+                confidence_level=_score_to_confidence_level(escalation_confidence).value,
                 processing_time_ms=escalation_duration,
                 details={
                     "should_escalate": escalation_decision.should_escalate,
                     "escalation_type": escalation_decision.escalation_type.value if escalation_decision.escalation_type else None,
-                    "reason": escalation_decision.reason,
+                    "reason": escalation_decision.escalation_reason.value if escalation_decision.escalation_reason else None,
                     "priority": escalation_decision.priority,
                 },
             )
