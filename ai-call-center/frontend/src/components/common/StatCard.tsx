@@ -4,21 +4,25 @@ import styles from './StatCard.module.css'
 
 export function StatCard({ label, value, change, trend = 'neutral', icon }: StatCardProps) {
   const TrendIcon = trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : Minus
+  const trendLabel = trend === 'up' ? 'increased' : trend === 'down' ? 'decreased' : 'unchanged'
   
   return (
-    <div className={styles.card}>
+    <article className={styles.card} aria-label={`${label}: ${value}`}>
       <div className={styles.header}>
-        <span className={styles.label}>{label}</span>
-        {icon && <div className={styles.icon}>{icon}</div>}
+        <h3 className={styles.label}>{label}</h3>
+        {icon && <div className={styles.icon} aria-hidden="true">{icon}</div>}
       </div>
-      <div className={styles.value}>{value}</div>
+      <div className={styles.value} aria-live="polite">{value}</div>
       {change !== undefined && (
-        <div className={`${styles.change} ${styles[trend]}`}>
-          <TrendIcon size={14} />
+        <div 
+          className={`${styles.change} ${styles[trend]}`}
+          aria-label={`${trendLabel} by ${Math.abs(change)} percent compared to last hour`}
+        >
+          <TrendIcon size={14} aria-hidden="true" />
           <span>{Math.abs(change)}%</span>
           <span className={styles.period}>vs last hour</span>
         </div>
       )}
-    </div>
+    </article>
   )
 }

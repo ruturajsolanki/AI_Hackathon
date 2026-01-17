@@ -615,6 +615,242 @@
   color: var(--color-text-muted);
 }
 
+/* Connection Status */
+.connectionStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-left: var(--space-md);
+  padding: 2px 8px;
+  background-color: rgba(16, 185, 129, 0.15);
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  color: var(--color-accent-success);
+}
+
+/* Voice Status */
+.voiceStatus {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.voiceIndicator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.voiceDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--color-text-muted);
+  transition: all 0.3s ease;
+}
+
+.voiceDot.active {
+  background-color: var(--color-accent-success);
+  box-shadow: 0 0 8px var(--color-accent-success);
+}
+
+/* TTS Button */
+.ttsButton {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-bg-secondary);
+  color: var(--color-accent-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.ttsButton:hover {
+  background-color: var(--color-bg-hover);
+}
+
+.ttsButton.muted {
+  color: var(--color-text-muted);
+}
+
+/* Microphone Button Recording State */
+.micButton.recording {
+  background-color: var(--color-accent-danger);
+  border-color: var(--color-accent-danger);
+  color: white;
+  animation: pulse-recording 1.5s ease-in-out infinite;
+}
+
+.micButton.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.micRecording {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: pulse-mic 1s ease-in-out infinite;
+}
+
+@keyframes pulse-recording {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+  }
+}
+
+@keyframes pulse-mic {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+/* Transcribing Indicator */
+.transcribing {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  background-color: var(--color-accent-primary);
+  border-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-sm);
+}
+
+.transcribingDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: white;
+  animation: transcribe-pulse 1s ease-in-out infinite;
+}
+
+@keyframes transcribe-pulse {
+  0%, 100% { 
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% { 
+    opacity: 0.5;
+    transform: scale(0.8);
+  }
+}
+
+.transcribingText {
+  color: white;
+  font-size: 0.9rem;
+  font-style: italic;
+  min-width: 100px;
+}
+
+/* Spinning Animation */
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Error Banner */
+.errorBanner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-sm);
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-md);
+  font-size: 0.8rem;
+  color: var(--color-accent-danger);
+}
+
+/* Error Message */
+.message.error .messageText {
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--color-accent-danger);
+}
+
+.error .messageAvatar {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: var(--color-accent-danger);
+}
+
+/* Connecting Status */
+.statusBadge.connecting {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: var(--color-accent-warning);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Error Status */
+.statusBadge.error {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: var(--color-accent-danger);
+}
+
+/* Call ID */
+.callIdValue {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  word-break: break-all;
+}
+
+/* Start Button Disabled */
+.startButton:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* End Button Disabled */
+.endButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Pulse Animation */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Slide Up Animation */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Screen reader only */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Responsive */
 @media (max-width: 900px) {
   .content {

@@ -4,8 +4,10 @@ Call Orchestrator Service
 Manages the lifecycle of customer interactions by coordinating
 the flow between Primary, Supervisor, and Escalation agents.
 
-Integrates with ContextStore for conversation history and
-MetricsEngine for analytics signals.
+Integrates with:
+- ContextStore for conversation history
+- MetricsEngine for analytics signals
+- PersistentStore for durable storage
 """
 
 from datetime import datetime, timezone
@@ -37,6 +39,7 @@ from app.memory.context_store import (
     MessageRole,
     ShortTermContext,
 )
+from app.persistence import PersistentStore, get_store
 
 
 # -----------------------------------------------------------------------------
@@ -146,11 +149,11 @@ class CallOrchestrator:
     - Invoking agents in sequence: Primary → Supervisor → Escalation
     - Maintaining interaction state via ContextStore
     - Emitting analytics signals via MetricsEngine
+    - Persisting interactions and decisions via PersistentStore
     - Determining final outcome
     
     Does NOT:
     - Handle API requests/responses
-    - Persist data to external storage
     - Implement AI logic
     - Manage WebSocket connections
     """
@@ -162,9 +165,10 @@ class CallOrchestrator:
         escalation_agent: Optional[EscalationAgent] = None,
         context_store: Optional[ContextStore] = None,
         metrics_engine: Optional[MetricsEngine] = None,
+        persistent_store: Optional[PersistentStore] = None,
     ):
         """
-        Initialize the orchestrator with agents, context store, and metrics.
+        Initialize the orchestrator with agents, stores, and metrics.
         
         Args:
             primary_agent: Primary interaction agent (created if not provided).
@@ -172,12 +176,14 @@ class CallOrchestrator:
             escalation_agent: Escalation decision agent (created if not provided).
             context_store: Context memory store (created if not provided).
             metrics_engine: Analytics engine (created if not provided).
+            persistent_store: Persistent storage (uses singleton if not provided).
         """
         self._primary_agent = primary_agent or PrimaryAgent()
         self._supervisor_agent = supervisor_agent or SupervisorAgent()
         self._escalation_agent = escalation_agent or EscalationAgent()
         self._context_store = context_store or ContextStore()
         self._metrics_engine = metrics_engine or MetricsEngine()
+        self._persistent_store = persistent_store or get_store()
         self._active_states: dict[UUID, InteractionState] = {}
 
     @property
@@ -190,13 +196,18 @@ class CallOrchestrator:
         """Access the metrics engine."""
         return self._metrics_engine
 
+    @property
+    def persistent_store(self) -> PersistentStore:
+        """Access the persistent store."""
+        return self._persistent_store
+
     async def create_interaction(
         self,
         interaction: CustomerInteraction,
         initial_context: Optional[ConversationContext] = None,
     ) -> InteractionState:
         """
-        Create a new interaction state with context and analytics initialization.
+        Create a new interaction state with context, analytics, and persistence.
         
         Args:
             interaction: The customer interaction entity.
@@ -221,6 +232,9 @@ class CallOrchestrator:
             started_at=interaction.started_at,
         )
         
+        # Persist interaction start
+        self._persist_interaction_start(interaction)
+        
         # Create orchestration state
         state = InteractionState(
             interaction_id=interaction.interaction_id,
@@ -229,6 +243,21 @@ class CallOrchestrator:
         self._active_states[interaction.interaction_id] = state
         
         return state
+
+    def _persist_interaction_start(self, interaction: CustomerInteraction) -> None:
+        """Persist interaction start to durable storage."""
+        try:
+            self._persistent_store.save_interaction(
+                interaction_id=interaction.interaction_id,
+                channel=interaction.channel,
+                status=interaction.status.value if interaction.status else "initiated",
+                started_at=interaction.started_at,
+                customer_id=interaction.customer_id,
+                metadata=interaction.metadata,
+            )
+        except Exception:
+            # Log but don't fail - persistence is best-effort
+            pass
 
     def get_state(self, interaction_id: UUID) -> Optional[InteractionState]:
         """Retrieve current state for an interaction."""
@@ -245,14 +274,17 @@ class CallOrchestrator:
         
         Flow:
         1. Store customer message in context
-        2. Retrieve short-term context
-        3. Invoke Primary Agent
-        4. Emit analytics for primary decision
-        5. Invoke Supervisor Agent for review
-        6. Invoke Escalation Agent for decision
-        7. Emit escalation analytics if applicable
-        8. Determine final outcome
-        9. Store agent response in context (if applicable)
+        2. Persist customer message
+        3. Retrieve short-term context
+        4. Invoke Primary Agent
+        5. Persist primary decision
+        6. Invoke Supervisor Agent for review
+        7. Persist supervisor decision
+        8. Invoke Escalation Agent for decision
+        9. Persist escalation decision
+        10. Determine final outcome
+        11. Store agent response
+        12. Persist agent response
         
         Args:
             interaction_id: ID of the active interaction.
@@ -283,12 +315,21 @@ class CallOrchestrator:
                 metadata or {},
             )
             
-            # Step 2: Get short-term context
+            # Step 2: Persist customer message
+            self._persist_message(
+                message_id=customer_message.message_id,
+                interaction_id=interaction_id,
+                role="customer",
+                content=content,
+                metadata=metadata,
+            )
+            
+            # Step 3: Get short-term context
             short_term_context = await self._context_store.get_short_term_context(
                 interaction_id
             )
             
-            # Step 3: Prepare agent input with context
+            # Step 4: Prepare agent input with context
             agent_input = self._prepare_agent_input(
                 state,
                 content,
@@ -298,59 +339,118 @@ class CallOrchestrator:
             state.current_phase = OrchestrationPhase.PRIMARY_PROCESSING
             state.turn_count += 1
             
-            # Step 4: Primary Agent processing
+            # Step 5: Primary Agent processing
+            primary_start = datetime.now(timezone.utc)
             primary_output = await self._invoke_primary_agent(agent_input)
+            primary_duration = int((datetime.now(timezone.utc) - primary_start).total_seconds() * 1000)
+            
             state.primary_outputs.append(primary_output)
             state.current_intent = primary_output.detected_intent
             state.current_emotion = primary_output.detected_emotion
             phases_completed.append(OrchestrationPhase.PRIMARY_PROCESSING)
             
-            # Step 5: Emit analytics for primary decision
+            # Step 6: Emit analytics for primary decision
             await self._emit_turn_analytics(
                 interaction_id,
                 primary_output,
                 AgentType.PRIMARY,
             )
             
-            # Step 6: Store primary decision in context
+            # Step 7: Store primary decision in context
             await self._store_decision(
                 interaction_id,
                 primary_output,
                 supervisor_approved=None,
             )
             
-            # Step 7: Supervisor review
+            # Step 8: Persist primary decision
+            self._persist_agent_decision(
+                interaction_id=interaction_id,
+                message_id=customer_message.message_id,
+                agent_type="primary",
+                decision_type=primary_output.decision_summary or "response",
+                confidence=primary_output.confidence.overall_score,
+                confidence_level=primary_output.confidence.level.value,
+                processing_time_ms=primary_duration,
+                details={
+                    "intent": primary_output.detected_intent.value if primary_output.detected_intent else None,
+                    "emotion": primary_output.detected_emotion.value if primary_output.detected_emotion else None,
+                    "reasoning": primary_output.reasoning,
+                },
+            )
+            
+            # Step 9: Supervisor review
             state.current_phase = OrchestrationPhase.SUPERVISOR_REVIEW
+            supervisor_start = datetime.now(timezone.utc)
             supervisor_review = await self._invoke_supervisor_agent(
                 primary_output,
                 agent_input,
             )
+            supervisor_duration = int((datetime.now(timezone.utc) - supervisor_start).total_seconds() * 1000)
+            
             state.supervisor_reviews.append(supervisor_review)
             phases_completed.append(OrchestrationPhase.SUPERVISOR_REVIEW)
             
-            # Step 8: Update decision with supervisor review
+            # Step 10: Update decision with supervisor review
             await self._update_decision_with_review(
                 interaction_id,
                 primary_output,
                 supervisor_review,
             )
             
-            # Step 9: Escalation evaluation
+            # Step 11: Persist supervisor decision
+            self._persist_agent_decision(
+                interaction_id=interaction_id,
+                message_id=customer_message.message_id,
+                agent_type="supervisor",
+                decision_type="approved" if supervisor_review.approved else "flagged",
+                confidence=supervisor_review.adjusted_confidence,
+                confidence_level=supervisor_review.adjusted_confidence_level.value,
+                processing_time_ms=supervisor_duration,
+                details={
+                    "approved": supervisor_review.approved,
+                    "quality_score": supervisor_review.quality_score,
+                    "risk_level": supervisor_review.risk_level.value if supervisor_review.risk_level else None,
+                    "flags": supervisor_review.flags,
+                },
+            )
+            
+            # Step 12: Escalation evaluation
             state.current_phase = OrchestrationPhase.ESCALATION_EVALUATION
+            escalation_start = datetime.now(timezone.utc)
             escalation_decision = await self._invoke_escalation_agent(
                 primary_output,
                 supervisor_review,
                 agent_input,
                 state.escalation_history,
             )
+            escalation_duration = int((datetime.now(timezone.utc) - escalation_start).total_seconds() * 1000)
+            
             state.escalation_decisions.append(escalation_decision)
             phases_completed.append(OrchestrationPhase.ESCALATION_EVALUATION)
             
-            # Step 10: Emit escalation analytics if escalating
+            # Step 13: Persist escalation decision
+            self._persist_agent_decision(
+                interaction_id=interaction_id,
+                message_id=customer_message.message_id,
+                agent_type="escalation",
+                decision_type=escalation_decision.escalation_type.value if escalation_decision.escalation_type else "none",
+                confidence=escalation_decision.confidence,
+                confidence_level=escalation_decision.confidence_level.value,
+                processing_time_ms=escalation_duration,
+                details={
+                    "should_escalate": escalation_decision.should_escalate,
+                    "escalation_type": escalation_decision.escalation_type.value if escalation_decision.escalation_type else None,
+                    "reason": escalation_decision.reason,
+                    "priority": escalation_decision.priority,
+                },
+            )
+            
+            # Step 14: Emit escalation analytics if escalating
             if escalation_decision.should_escalate:
                 await self._emit_escalation_analytics(interaction_id)
             
-            # Step 11: Determine outcome
+            # Step 15: Determine outcome
             result = self._determine_outcome(
                 state,
                 primary_output,
@@ -360,19 +460,36 @@ class CallOrchestrator:
                 start_time,
             )
             
-            # Step 12: Store agent response if responding
+            # Step 16: Store and persist agent response if responding
             if result.should_respond and result.response_content:
-                await self._store_agent_response(
+                agent_message = await self._store_agent_response(
                     interaction_id,
                     result.response_content,
                     primary_output,
                 )
+                
+                self._persist_message(
+                    message_id=agent_message.message_id,
+                    interaction_id=interaction_id,
+                    role="agent",
+                    content=result.response_content,
+                    metadata={
+                        "intent": primary_output.detected_intent.value if primary_output.detected_intent else None,
+                        "confidence": primary_output.confidence.overall_score,
+                    },
+                )
             
-            # Step 13: Update context with topics/issues
+            # Step 17: Update context with topics/issues
             await self._update_context_from_output(interaction_id, primary_output)
             
             # Update state
             self._update_state_from_result(state, result)
+            
+            # Update persisted interaction status
+            self._persist_interaction_status_update(
+                interaction_id,
+                "escalated" if result.should_escalate else "in_progress",
+            )
             
             return result
             
@@ -384,6 +501,72 @@ class CallOrchestrator:
                 start_time,
                 phases_completed,
             )
+
+    def _persist_message(
+        self,
+        message_id: UUID,
+        interaction_id: UUID,
+        role: str,
+        content: str,
+        metadata: Optional[dict] = None,
+    ) -> None:
+        """Persist a message to durable storage."""
+        try:
+            self._persistent_store.save_message(
+                message_id=message_id,
+                interaction_id=interaction_id,
+                role=role,
+                content=content,
+                metadata=metadata,
+            )
+        except Exception:
+            # Log but don't fail
+            pass
+
+    def _persist_agent_decision(
+        self,
+        interaction_id: UUID,
+        agent_type: str,
+        decision_type: str,
+        confidence: float,
+        confidence_level: str,
+        processing_time_ms: int,
+        message_id: Optional[UUID] = None,
+        details: Optional[dict] = None,
+    ) -> None:
+        """Persist an agent decision to durable storage."""
+        try:
+            self._persistent_store.save_agent_decision(
+                decision_id=uuid4(),
+                interaction_id=interaction_id,
+                message_id=message_id,
+                agent_type=agent_type,
+                decision_type=decision_type,
+                confidence=confidence,
+                confidence_level=confidence_level,
+                processing_time_ms=processing_time_ms,
+                details=details,
+            )
+        except Exception:
+            # Log but don't fail
+            pass
+
+    def _persist_interaction_status_update(
+        self,
+        interaction_id: UUID,
+        status: str,
+        ended_at: Optional[datetime] = None,
+    ) -> None:
+        """Update persisted interaction status."""
+        try:
+            self._persistent_store.update_interaction_status(
+                interaction_id=interaction_id,
+                status=status,
+                ended_at=ended_at,
+            )
+        except Exception:
+            # Log but don't fail
+            pass
 
     async def _emit_turn_analytics(
         self,
@@ -688,7 +871,7 @@ class CallOrchestrator:
         resolution: Optional[ResolutionType] = None,
     ) -> Optional[InteractionState]:
         """
-        End an interaction with analytics finalization.
+        End an interaction with analytics finalization and persistence.
         
         Args:
             interaction_id: Interaction to end.
@@ -698,6 +881,7 @@ class CallOrchestrator:
             Final state for persistence/logging.
         """
         state = self._active_states.get(interaction_id)
+        end_time = datetime.now(timezone.utc)
         
         # Determine resolution type
         if resolution is None:
@@ -717,11 +901,21 @@ class CallOrchestrator:
             resolution_type=resolution,
         )
         
+        # Persist interaction end
+        status = "completed" if resolution == ResolutionType.AI_RESOLVED else \
+                 "escalated" if resolution == ResolutionType.HUMAN_ESCALATED else \
+                 "abandoned"
+        self._persist_interaction_status_update(
+            interaction_id,
+            status,
+            ended_at=end_time,
+        )
+        
         # Remove from active states
         state = self._active_states.pop(interaction_id, None)
         if state:
             state.is_completed = True
-            state.last_updated = datetime.now(timezone.utc)
+            state.last_updated = end_time
         
         return state
 
@@ -753,3 +947,52 @@ class CallOrchestrator:
     def get_active_count(self) -> int:
         """Get count of active interactions being tracked."""
         return len(self._active_states)
+
+    def get_past_interactions(
+        self,
+        status: Optional[str] = None,
+        limit: int = 100,
+    ) -> list:
+        """
+        Retrieve past interactions from persistent storage.
+        
+        Args:
+            status: Optional status filter.
+            limit: Maximum number of results.
+            
+        Returns:
+            List of interaction summaries.
+        """
+        return self._persistent_store.list_interactions(status=status, limit=limit)
+
+    def get_past_messages(self, interaction_id: UUID) -> list:
+        """
+        Retrieve past messages from persistent storage.
+        
+        Args:
+            interaction_id: The interaction to get messages for.
+            
+        Returns:
+            List of stored messages.
+        """
+        return self._persistent_store.get_messages(interaction_id)
+
+    def get_past_decisions(
+        self,
+        interaction_id: UUID,
+        agent_type: Optional[str] = None,
+    ) -> list:
+        """
+        Retrieve past agent decisions from persistent storage.
+        
+        Args:
+            interaction_id: The interaction to get decisions for.
+            agent_type: Optional filter by agent type.
+            
+        Returns:
+            List of stored agent decisions.
+        """
+        return self._persistent_store.get_agent_decisions(
+            interaction_id,
+            agent_type=agent_type,
+        )

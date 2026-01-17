@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { 
   Phone, 
   PhoneOff, 
@@ -6,6 +6,7 @@ import {
   MicOff, 
   Send,
   Volume2,
+  VolumeX,
   AlertTriangle,
   CheckCircle,
   Clock,
@@ -15,15 +16,21 @@ import {
   User,
   Bot,
   Wifi,
-  WifiOff
+  Loader2,
+  XCircle
 } from 'lucide-react'
-import { startInteraction, sendMessage, endInteraction } from '../../services/api'
+import { startCall, sendMessage, endCall } from '../../services/apiClient'
+import { useSpeechRecognition } from '../../hooks/useSpeechRecognition'
+import { speak, stop as stopSpeech, isSupported as isTTSSupported } from '../../utils/speechSynthesis'
 import styles from './CallSimulator.module.css'
 
+// -----------------------------------------------------------------------------
 // Types
+// -----------------------------------------------------------------------------
+
 interface CallMessage {
   id: string
-  role: 'customer' | 'agent' | 'system'
+  role: 'customer' | 'agent' | 'system' | 'error'
   content: string
   timestamp: Date
   metadata?: {
@@ -35,24 +42,31 @@ interface CallMessage {
 }
 
 interface AgentState {
-  status: 'idle' | 'listening' | 'processing' | 'speaking'
+  status: 'idle' | 'connecting' | 'listening' | 'processing' | 'speaking' | 'error'
   confidence: number
   confidenceLevel: 'high' | 'medium' | 'low'
   intent: string
   emotion: string
   shouldEscalate: boolean
   escalationReason?: string
+  escalationType?: string
   turnCount: number
   sessionDuration: number
 }
 
+// -----------------------------------------------------------------------------
+// Component
+// -----------------------------------------------------------------------------
+
 export function CallSimulator() {
+  // State
+  const [callId, setCallId] = useState<string | null>(null)
   const [isCallActive, setIsCallActive] = useState(false)
-  const [isMuted, setIsMuted] = useState(false)
-  const [isConnected, setIsConnected] = useState(true)
-  const [interactionId, setInteractionId] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [messages, setMessages] = useState<CallMessage[]>([])
   const [input, setInput] = useState('')
+  const [ttsEnabled, setTtsEnabled] = useState(true)
   const [agentState, setAgentState] = useState<AgentState>({
     status: 'idle',
     confidence: 0,
@@ -64,8 +78,31 @@ export function CallSimulator() {
     sessionDuration: 0,
   })
   
+  // Speech Recognition Hook
+  const {
+    isListening,
+    isSupported: isSTTSupported,
+    transcript,
+    interimTranscript,
+    error: speechError,
+    permissionDenied,
+    startListening,
+    stopListening,
+    clearTranscript,
+  } = useSpeechRecognition({
+    language: 'en-US',
+    continuous: false,
+    interimResults: true,
+  })
+
+  // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const timerRef = useRef<NodeJS.Timeout | null>(null)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const lastTranscriptRef = useRef<string>('')
+
+  // ---------------------------------------------------------------------------
+  // Effects
+  // ---------------------------------------------------------------------------
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -74,7 +111,7 @@ export function CallSimulator() {
 
   // Session timer
   useEffect(() => {
-    if (isCallActive) {
+    if (isCallActive && agentState.status !== 'error') {
       timerRef.current = setInterval(() => {
         setAgentState(prev => ({
           ...prev,
@@ -91,7 +128,38 @@ export function CallSimulator() {
         clearInterval(timerRef.current)
       }
     }
+  }, [isCallActive, agentState.status])
+
+  // Handle speech recognition errors
+  useEffect(() => {
+    if (speechError && !permissionDenied) {
+      setError(speechError)
+    }
+  }, [speechError, permissionDenied])
+
+  // Auto-send transcribed text when speech ends
+  useEffect(() => {
+    if (!isListening && transcript && transcript !== lastTranscriptRef.current) {
+      lastTranscriptRef.current = transcript
+      
+      // Set the transcript as input and send
+      if (transcript.trim() && isCallActive && callId) {
+        handleVoiceMessage(transcript.trim())
+        clearTranscript()
+      }
+    }
+  }, [isListening, transcript, isCallActive, callId])
+
+  // Stop TTS when call ends
+  useEffect(() => {
+    if (!isCallActive) {
+      stopSpeech()
+    }
   }, [isCallActive])
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -99,58 +167,215 @@ export function CallSimulator() {
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
-  const getConfidenceLevel = (score: number): 'high' | 'medium' | 'low' => {
-    if (score >= 0.7) return 'high'
-    if (score >= 0.5) return 'medium'
+  const getConfidenceLevel = (level: string | null): 'high' | 'medium' | 'low' => {
+    if (level === 'high') return 'high'
+    if (level === 'medium') return 'medium'
     return 'low'
   }
 
-  const startCall = async () => {
-    setIsCallActive(true)
-    setAgentState(prev => ({ ...prev, status: 'processing' }))
-    
-    // Add system message
-    setMessages([{
-      id: 'connecting',
-      role: 'system',
-      content: 'Connecting to AI Agent...',
+  const getConfidenceScore = (level: string | null): number => {
+    if (level === 'high') return 0.85
+    if (level === 'medium') return 0.65
+    return 0.45
+  }
+
+  const getConfidenceColor = (level: string) => {
+    switch (level) {
+      case 'high': return 'var(--color-accent-success)'
+      case 'medium': return 'var(--color-accent-warning)'
+      case 'low': return 'var(--color-accent-danger)'
+      default: return 'var(--color-text-muted)'
+    }
+  }
+
+  const addMessage = useCallback((message: Omit<CallMessage, 'id' | 'timestamp'>) => {
+    setMessages(prev => [...prev, {
+      ...message,
+      id: `${message.role}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       timestamp: new Date(),
     }])
+  }, [])
 
-    // Call the real API
-    const response = await startInteraction({
-      channel: 'chat',
-      initialMessage: "Hello, I need some help.",
+  // Speak AI response using TTS
+  const speakResponse = useCallback(async (text: string) => {
+    if (!ttsEnabled || !isTTSSupported()) return
+    
+    try {
+      await speak(text, {
+        rate: 1.0,
+        pitch: 1.0,
+        volume: 0.9,
+        onStart: () => {
+          setAgentState(prev => ({ ...prev, status: 'speaking' }))
+        },
+        onEnd: () => {
+          setAgentState(prev => ({ 
+            ...prev, 
+            status: prev.shouldEscalate ? 'speaking' : 'listening' 
+          }))
+        },
+      })
+    } catch {
+      // TTS failed, just continue
+    }
+  }, [ttsEnabled])
+
+  // ---------------------------------------------------------------------------
+  // Voice Handlers
+  // ---------------------------------------------------------------------------
+
+  const toggleMicrophone = useCallback(() => {
+    if (!isSTTSupported) {
+      setError('Speech recognition is not supported in this browser.')
+      return
+    }
+
+    if (isListening) {
+      stopListening()
+    } else {
+      stopSpeech() // Stop any ongoing TTS
+      clearTranscript()
+      lastTranscriptRef.current = ''
+      startListening()
+    }
+  }, [isSTTSupported, isListening, startListening, stopListening, clearTranscript])
+
+  const toggleTTS = useCallback(() => {
+    if (!ttsEnabled) {
+      setTtsEnabled(true)
+    } else {
+      stopSpeech()
+      setTtsEnabled(false)
+    }
+  }, [ttsEnabled])
+
+  // Handle voice message (from speech recognition)
+  const handleVoiceMessage = useCallback(async (voiceText: string) => {
+    if (!voiceText.trim() || !isCallActive || !callId || agentState.status === 'processing') {
+      return
+    }
+
+    setError(null)
+    
+    // Add customer message
+    addMessage({
+      role: 'customer',
+      content: voiceText,
     })
 
-    if (response.success && response.data) {
-      setInteractionId(response.data.interaction_id)
-      setIsConnected(true)
+    // Set processing state
+    setAgentState(prev => ({ ...prev, status: 'processing' }))
+    setIsLoading(true)
+
+    const startTime = Date.now()
+
+    // Call API
+    const result = await sendMessage(callId, voiceText)
+    
+    const processingTime = Date.now() - startTime
+    setIsLoading(false)
+
+    if (result.success && result.data) {
+      const data = result.data
+      const confidenceLevel = getConfidenceLevel(data.confidenceLevel)
+      const confidenceScore = getConfidenceScore(data.confidenceLevel)
+
+      // Update agent state
+      setAgentState(prev => ({
+        ...prev,
+        status: 'speaking',
+        confidence: confidenceScore,
+        confidenceLevel,
+        intent: 'detected',
+        emotion: 'analyzed',
+        shouldEscalate: data.shouldEscalate,
+        escalationReason: data.escalationReason || undefined,
+        escalationType: data.escalationType || undefined,
+        turnCount: prev.turnCount + 1,
+      }))
+
+      // Add agent response and speak it
+      if (data.responseContent) {
+        addMessage({
+          role: 'agent',
+          content: data.responseContent,
+          metadata: {
+            confidence: confidenceScore,
+            processingTime,
+          },
+        })
+
+        // Speak the response
+        await speakResponse(data.responseContent)
+      }
+
+      // Add escalation notice if needed
+      if (data.shouldEscalate) {
+        addMessage({
+          role: 'system',
+          content: `⚠️ Escalation triggered: ${data.escalationReason || 'Complex issue detected'}`,
+        })
+      }
+
+    } else {
+      // Handle error
+      setError(result.error?.message || 'Failed to send message')
+      setAgentState(prev => ({ ...prev, status: 'listening' }))
       
-      const greeting = response.data.initial_response || 
-        "Hello! Thank you for calling. I'm your AI assistant. How can I help you today?"
+      addMessage({
+        role: 'error',
+        content: `Error: ${result.error?.message || 'Failed to process message'}`,
+      })
+    }
+  }, [callId, isCallActive, agentState.status, addMessage, speakResponse])
+
+  // ---------------------------------------------------------------------------
+  // API Handlers
+  // ---------------------------------------------------------------------------
+
+  const handleStartCall = async () => {
+    setIsLoading(true)
+    setError(null)
+    setIsCallActive(true)
+    setAgentState(prev => ({ ...prev, status: 'connecting' }))
+    
+    addMessage({
+      role: 'system',
+      content: 'Connecting to AI Agent...',
+    })
+
+    const result = await startCall({
+      channel: 'voice',
+    })
+
+    setIsLoading(false)
+
+    if (result.success && result.data) {
+      const { callId: newCallId, initialResponse } = result.data
+      setCallId(newCallId)
       
+      // Clear connecting message and add success
       setMessages([
         {
-          id: 'welcome',
+          id: 'connected',
           role: 'system',
-          content: 'Call connected. AI Agent is ready.',
+          content: 'Call connected. AI Agent is ready. Click the microphone to speak.',
           timestamp: new Date(),
-        },
-        {
-          id: 'greeting',
-          role: 'agent',
-          content: greeting,
-          timestamp: new Date(),
-          metadata: {
-            intent: 'greeting',
-            emotion: 'neutral',
-            confidence: 0.95,
-            processingTime: 150,
-          },
         },
       ])
-      
+
+      const greeting = initialResponse || 
+        "Hello! Thank you for calling. I'm your AI assistant. How can I help you today?"
+
+      addMessage({
+        role: 'agent',
+        content: greeting,
+        metadata: {
+          intent: 'greeting',
+          confidence: 0.95,
+        },
+      })
+
       setAgentState({
         status: 'listening',
         confidence: 0.95,
@@ -161,56 +386,48 @@ export function CallSimulator() {
         turnCount: 1,
         sessionDuration: 0,
       })
+
+      // Speak the greeting
+      await speakResponse(greeting)
+
     } else {
-      // Fallback to simulated mode
-      setIsConnected(false)
-      setMessages([
-        {
-          id: 'welcome',
-          role: 'system',
-          content: 'Call connected (Simulation Mode - Backend unavailable)',
-          timestamp: new Date(),
-        },
-        {
-          id: 'greeting',
-          role: 'agent',
-          content: "Hello! Thank you for calling. I'm your AI assistant. How can I help you today?",
-          timestamp: new Date(),
-          metadata: {
-            intent: 'greeting',
-            emotion: 'neutral',
-            confidence: 0.98,
-            processingTime: 120,
-          },
-        },
-      ])
+      setError(result.error?.message || 'Failed to start call')
+      setAgentState(prev => ({ ...prev, status: 'error' }))
       
-      setAgentState({
-        status: 'listening',
-        confidence: 0.98,
-        confidenceLevel: 'high',
-        intent: 'greeting',
-        emotion: 'neutral',
-        shouldEscalate: false,
-        turnCount: 1,
-        sessionDuration: 0,
-      })
+      setMessages([{
+        id: 'error',
+        role: 'error',
+        content: `Connection failed: ${result.error?.message || 'Unknown error'}`,
+        timestamp: new Date(),
+      }])
     }
   }
 
-  const endCall = async () => {
-    if (interactionId) {
-      await endInteraction({ interactionId })
+  const handleEndCall = async () => {
+    // Stop any ongoing speech/listening
+    stopSpeech()
+    if (isListening) stopListening()
+
+    if (!callId) {
+      setIsCallActive(false)
+      return
     }
+
+    setIsLoading(true)
     
+    const result = await endCall(callId)
+    
+    setIsLoading(false)
     setIsCallActive(false)
-    setInteractionId(null)
-    setMessages(prev => [...prev, {
-      id: 'goodbye',
+    setCallId(null)
+
+    addMessage({
       role: 'system',
-      content: `Call ended. Duration: ${formatDuration(agentState.sessionDuration)}. ${agentState.turnCount} turns processed.`,
-      timestamp: new Date(),
-    }])
+      content: result.success 
+        ? `Call ended. Duration: ${formatDuration(agentState.sessionDuration)}. ${agentState.turnCount} turns processed.`
+        : `Call ended (with error: ${result.error?.message})`,
+    })
+
     setAgentState({
       status: 'idle',
       confidence: 0,
@@ -223,212 +440,128 @@ export function CallSimulator() {
     })
   }
 
-  const handleSend = async () => {
-    if (!input.trim() || !isCallActive || agentState.status === 'processing') return
-
-    const customerMessage: CallMessage = {
-      id: `customer-${Date.now()}`,
-      role: 'customer',
-      content: input,
-      timestamp: new Date(),
+  const handleSendMessage = async () => {
+    if (!input.trim() || !isCallActive || !callId || agentState.status === 'processing') {
+      return
     }
-    
-    setMessages(prev => [...prev, customerMessage])
-    const userInput = input
+
+    const userMessage = input.trim()
     setInput('')
+    setError(null)
+    
+    // Stop any ongoing TTS
+    stopSpeech()
+    
+    // Add customer message
+    addMessage({
+      role: 'customer',
+      content: userMessage,
+    })
+
+    // Set processing state
     setAgentState(prev => ({ ...prev, status: 'processing' }))
+    setIsLoading(true)
 
     const startTime = Date.now()
 
-    if (interactionId && isConnected) {
-      // Use real API
-      const response = await sendMessage({
-        interactionId,
-        content: userInput,
-      })
+    // Call API
+    const result = await sendMessage(callId, userMessage)
+    
+    const processingTime = Date.now() - startTime
+    setIsLoading(false)
 
-      const processingTime = Date.now() - startTime
+    if (result.success && result.data) {
+      const data = result.data
+      const confidenceLevel = getConfidenceLevel(data.confidenceLevel)
+      const confidenceScore = getConfidenceScore(data.confidenceLevel)
 
-      if (response.success && response.data) {
-        const data = response.data
-        const confidenceScore = data.confidence_level === 'high' ? 0.85 :
-                               data.confidence_level === 'medium' ? 0.65 : 0.45
+      // Update agent state
+      setAgentState(prev => ({
+        ...prev,
+        status: 'speaking',
+        confidence: confidenceScore,
+        confidenceLevel,
+        intent: 'detected',
+        emotion: 'analyzed',
+        shouldEscalate: data.shouldEscalate,
+        escalationReason: data.escalationReason || undefined,
+        escalationType: data.escalationType || undefined,
+        turnCount: prev.turnCount + 1,
+      }))
 
-        setAgentState(prev => ({
-          ...prev,
-          status: 'speaking',
-          confidence: confidenceScore,
-          confidenceLevel: getConfidenceLevel(confidenceScore),
-          intent: 'detected',
-          emotion: 'analyzed',
-          shouldEscalate: data.should_escalate,
-          escalationReason: data.escalation_reason || undefined,
-          turnCount: prev.turnCount + 1,
-        }))
-
-        const agentMessage: CallMessage = {
-          id: `agent-${Date.now()}`,
+      // Add agent response and speak it
+      if (data.responseContent) {
+        addMessage({
           role: 'agent',
-          content: data.response_content || "I understand. Let me help you with that.",
-          timestamp: new Date(),
+          content: data.responseContent,
           metadata: {
-            intent: 'response',
             confidence: confidenceScore,
             processingTime,
           },
-        }
-        
-        setMessages(prev => [...prev, agentMessage])
+        })
 
-        if (data.should_escalate) {
-          setMessages(prev => [...prev, {
-            id: `escalation-${Date.now()}`,
-            role: 'system',
-            content: `⚠️ Escalation triggered: ${data.escalation_reason || 'Complex issue detected'}`,
-            timestamp: new Date(),
-          }])
-        }
-      } else {
-        // API error, add error message
-        setMessages(prev => [...prev, {
-          id: `error-${Date.now()}`,
+        // Speak the response
+        await speakResponse(data.responseContent)
+      }
+
+      // Add escalation notice if needed
+      if (data.shouldEscalate) {
+        addMessage({
           role: 'system',
-          content: `Error: ${response.error || 'Failed to process message'}`,
-          timestamp: new Date(),
-        }])
+          content: `⚠️ Escalation triggered: ${data.escalationReason || 'Complex issue detected'}`,
+        })
       }
+
     } else {
-      // Simulation mode
-      await simulateResponse(userInput, startTime)
-    }
-
-    // Return to listening after "speaking"
-    setTimeout(() => {
+      setError(result.error?.message || 'Failed to send message')
       setAgentState(prev => ({ ...prev, status: 'listening' }))
-    }, 1000)
-  }
-
-  const simulateResponse = async (userInput: string, startTime: number) => {
-    // Simulate processing delay
-    await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 500))
-    
-    const processingTime = Date.now() - startTime
-    const lower = userInput.toLowerCase()
-    
-    let response = {
-      content: "Thank you for reaching out. I'm here to help with billing questions, order tracking, account management, and more.",
-      intent: 'general_inquiry',
-      emotion: 'neutral',
-      confidence: 0.88,
-      shouldEscalate: false,
-      escalationReason: undefined as string | undefined,
-    }
-
-    if (lower.includes('angry') || lower.includes('furious') || lower.includes('unacceptable')) {
-      response = {
-        content: "I sincerely apologize for the frustration you're experiencing. Let me connect you with a specialist who can give this the attention it deserves.",
-        intent: 'complaint',
-        emotion: 'angry',
-        confidence: 0.65,
-        shouldEscalate: true,
-        escalationReason: 'High emotional distress detected',
-      }
-    } else if (lower.includes('bill') || lower.includes('charge') || lower.includes('payment')) {
-      response = {
-        content: "I can see your account details. Your current balance is $142.50. I notice there's a recent charge - would you like me to explain that?",
-        intent: 'billing_inquiry',
-        emotion: 'neutral',
-        confidence: 0.92,
-        shouldEscalate: false,
-        escalationReason: undefined,
-      }
-    } else if (lower.includes('cancel')) {
-      response = {
-        content: "I understand you're considering cancellation. Before we proceed, is there something specific we could help address? We value your business.",
-        intent: 'cancellation',
-        emotion: 'neutral',
-        confidence: 0.78,
-        shouldEscalate: false,
-        escalationReason: undefined,
-      }
-    }
-
-    setAgentState(prev => ({
-      ...prev,
-      status: 'speaking',
-      confidence: response.confidence,
-      confidenceLevel: getConfidenceLevel(response.confidence),
-      intent: response.intent,
-      emotion: response.emotion,
-      shouldEscalate: response.shouldEscalate,
-      escalationReason: response.escalationReason,
-      turnCount: prev.turnCount + 1,
-    }))
-
-    setMessages(prev => [...prev, {
-      id: `agent-${Date.now()}`,
-      role: 'agent',
-      content: response.content,
-      timestamp: new Date(),
-      metadata: {
-        intent: response.intent,
-        emotion: response.emotion,
-        confidence: response.confidence,
-        processingTime,
-      },
-    }])
-
-    if (response.shouldEscalate) {
-      setMessages(prev => [...prev, {
-        id: `escalation-${Date.now()}`,
-        role: 'system',
-        content: `⚠️ Escalation triggered: ${response.escalationReason}`,
-        timestamp: new Date(),
-      }])
+      
+      addMessage({
+        role: 'error',
+        content: `Error: ${result.error?.message || 'Failed to process message'}`,
+      })
     }
   }
 
-  const getConfidenceColor = (level: string) => {
-    switch (level) {
-      case 'high': return 'var(--color-accent-success)'
-      case 'medium': return 'var(--color-accent-warning)'
-      case 'low': return 'var(--color-accent-danger)'
-      default: return 'var(--color-text-muted)'
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSendMessage()
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
 
   return (
-    <div className={styles.simulator}>
+    <div className={styles.simulator} role="application" aria-label="AI Call Simulator">
       {/* Header */}
-      <div className={styles.header}>
+      <header className={styles.header}>
         <div className={styles.headerInfo}>
           <h2 className={styles.title}>Call Simulator</h2>
           <p className={styles.subtitle}>
             Interactive AI agent demonstration
-            {isCallActive && (
-              <span className={styles.connectionStatus}>
-                {isConnected ? (
-                  <><Wifi size={12} /> Live Backend</>
-                ) : (
-                  <><WifiOff size={12} /> Simulation Mode</>
-                )}
+            {isCallActive && callId && (
+              <span className={styles.connectionStatus} role="status" aria-live="polite">
+                <Wifi size={12} aria-hidden="true" /> Connected
               </span>
             )}
           </p>
         </div>
         {isCallActive && (
-          <div className={styles.callStatus}>
+          <div className={styles.callStatus} role="status" aria-live="polite">
             <span className={styles.liveIndicator}>
-              <span className={styles.liveDot} />
-              LIVE
+              <span className={styles.liveDot} aria-hidden="true" />
+              <span aria-label="Call is live">LIVE</span>
             </span>
-            <span className={styles.duration}>
-              <Clock size={14} />
-              {formatDuration(agentState.sessionDuration)}
+            <span className={styles.duration} aria-label={`Call duration: ${formatDuration(agentState.sessionDuration)}`}>
+              <Clock size={14} aria-hidden="true" />
+              <time>{formatDuration(agentState.sessionDuration)}</time>
             </span>
           </div>
         )}
-      </div>
+      </header>
 
       <div className={styles.content}>
         {/* Main Call Area */}
@@ -438,67 +571,94 @@ export function CallSimulator() {
               <div className={styles.startIcon}>
                 <Phone size={48} />
               </div>
-              <h3>Start a Simulated Call</h3>
-              <p>Experience the AI-powered call center in action</p>
-              <button className={styles.startButton} onClick={startCall}>
-                <Phone size={20} />
-                Start Call
+              <h3>Start a Voice Call</h3>
+              <p>Experience the AI-powered call center with voice</p>
+              <button 
+                className={styles.startButton} 
+                onClick={handleStartCall}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 size={20} className={styles.spinning} />
+                    Connecting...
+                  </>
+                ) : (
+                  <>
+                    <Phone size={20} />
+                    Start Call
+                  </>
+                )}
               </button>
               <div className={styles.hints}>
-                <span className={styles.hint}>Try: "I have a question about my bill"</span>
-                <span className={styles.hint}>Try: "Where is my order?"</span>
-                <span className={styles.hint}>Try: "I'm very angry about this!"</span>
+                <span className={styles.hint}>🎤 Click microphone to speak</span>
+                <span className={styles.hint}>🔊 AI will respond with voice</span>
+                <span className={styles.hint}>⌨️ Or type your message</span>
               </div>
             </div>
           ) : (
             <>
               {/* Messages */}
-              <div className={styles.messages}>
+              <div 
+                className={styles.messages}
+                role="log"
+                aria-label="Conversation messages"
+                aria-live="polite"
+              >
                 {messages.map((message) => (
-                  <div 
+                  <article 
                     key={message.id} 
                     className={`${styles.message} ${styles[message.role]}`}
+                    aria-label={`${message.role === 'customer' ? 'You' : message.role === 'agent' ? 'AI Agent' : message.role === 'error' ? 'Error' : 'System'} said: ${message.content}`}
                   >
-                    <div className={styles.messageAvatar}>
+                    <div className={styles.messageAvatar} aria-hidden="true">
                       {message.role === 'customer' && <User size={16} />}
                       {message.role === 'agent' && <Bot size={16} />}
                       {message.role === 'system' && <Volume2 size={16} />}
+                      {message.role === 'error' && <XCircle size={16} />}
                     </div>
                     <div className={styles.messageContent}>
                       <div className={styles.messageHeader}>
                         <span className={styles.messageRole}>
                           {message.role === 'customer' ? 'You' : 
-                           message.role === 'agent' ? 'AI Agent' : 'System'}
+                           message.role === 'agent' ? 'AI Agent' : 
+                           message.role === 'error' ? 'Error' : 'System'}
                         </span>
-                        <span className={styles.messageTime}>
+                        <time 
+                          className={styles.messageTime}
+                          dateTime={message.timestamp.toISOString()}
+                        >
                           {message.timestamp.toLocaleTimeString([], { 
                             hour: '2-digit', 
                             minute: '2-digit' 
                           })}
-                        </span>
+                        </time>
                       </div>
                       <p className={styles.messageText}>{message.content}</p>
                       {message.metadata && (
-                        <div className={styles.messageMeta}>
-                          <span className={styles.metaTag}>
-                            {message.metadata.intent?.replace('_', ' ')}
-                          </span>
-                          {message.metadata.confidence && (
-                            <span className={styles.metaConfidence}>
+                        <div className={styles.messageMeta} aria-label="Message details">
+                          {message.metadata.intent && (
+                            <span className={styles.metaTag} title="Detected intent">
+                              {message.metadata.intent.replace(/_/g, ' ')}
+                            </span>
+                          )}
+                          {message.metadata.confidence !== undefined && (
+                            <span className={styles.metaConfidence} title="AI confidence level">
                               {(message.metadata.confidence * 100).toFixed(0)}% confident
                             </span>
                           )}
-                          {message.metadata.processingTime && (
-                            <span className={styles.metaTime}>
+                          {message.metadata.processingTime !== undefined && (
+                            <span className={styles.metaTime} title="Processing time">
                               {message.metadata.processingTime}ms
                             </span>
                           )}
                         </div>
                       )}
                     </div>
-                  </div>
+                  </article>
                 ))}
                 
+                {/* Processing indicator */}
                 {agentState.status === 'processing' && (
                   <div className={`${styles.message} ${styles.agent}`}>
                     <div className={styles.messageAvatar}>
@@ -514,38 +674,106 @@ export function CallSimulator() {
                     </div>
                   </div>
                 )}
+
+                {/* Live transcription indicator */}
+                {isListening && (
+                  <div className={`${styles.message} ${styles.customer}`}>
+                    <div className={styles.messageAvatar}>
+                      <User size={16} />
+                    </div>
+                    <div className={styles.messageContent}>
+                      <div className={styles.transcribing}>
+                        <span className={styles.transcribingDot} />
+                        <span className={styles.transcribingText}>
+                          {interimTranscript || 'Listening...'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 
                 <div ref={messagesEndRef} />
               </div>
 
               {/* Input Area */}
               <div className={styles.inputArea}>
+                {error && (
+                  <div className={styles.errorBanner}>
+                    <XCircle size={14} />
+                    {error}
+                  </div>
+                )}
+                
+                {permissionDenied && (
+                  <div className={styles.errorBanner}>
+                    <MicOff size={14} />
+                    Microphone access denied. Please allow microphone access or type your message.
+                  </div>
+                )}
+
                 <div className={styles.inputWrapper}>
+                  <label htmlFor="message-input" className={styles.srOnly}>
+                    Type your message
+                  </label>
                   <input
+                    id="message-input"
                     type="text"
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                    placeholder="Type your message..."
+                    onKeyDown={handleKeyDown}
+                    placeholder={isListening ? 'Listening...' : 'Type or click mic to speak...'}
                     className={styles.input}
-                    disabled={agentState.status === 'processing'}
+                    disabled={agentState.status === 'processing' || agentState.status === 'error' || isListening}
+                    aria-describedby={error ? 'input-error' : undefined}
                   />
+                  
+                  {/* TTS Toggle */}
                   <button 
-                    className={`${styles.micButton} ${isMuted ? styles.muted : ''}`}
-                    onClick={() => setIsMuted(!isMuted)}
+                    className={`${styles.ttsButton} ${!ttsEnabled ? styles.muted : ''}`}
+                    onClick={toggleTTS}
+                    title={ttsEnabled ? 'Mute AI voice' : 'Enable AI voice'}
+                    aria-label={ttsEnabled ? 'Mute AI voice responses' : 'Enable AI voice responses'}
+                    aria-pressed={ttsEnabled}
                   >
-                    {isMuted ? <MicOff size={18} /> : <Mic size={18} />}
+                    {ttsEnabled ? <Volume2 size={18} aria-hidden="true" /> : <VolumeX size={18} aria-hidden="true" />}
                   </button>
+                  
+                  {/* Microphone Button */}
+                  <button 
+                    className={`${styles.micButton} ${isListening ? styles.recording : ''} ${permissionDenied ? styles.disabled : ''}`}
+                    onClick={toggleMicrophone}
+                    disabled={agentState.status === 'processing' || permissionDenied}
+                    title={isListening ? 'Stop listening' : 'Start voice input'}
+                    aria-label={isListening ? 'Stop listening' : 'Start voice input'}
+                    aria-pressed={isListening}
+                  >
+                    {isListening ? (
+                      <div className={styles.micRecording}>
+                        <Mic size={18} aria-hidden="true" />
+                      </div>
+                    ) : (
+                      <Mic size={18} aria-hidden="true" />
+                    )}
+                  </button>
+                  
+                  {/* Send Button */}
                   <button 
                     className={styles.sendButton}
-                    onClick={handleSend}
-                    disabled={!input.trim() || agentState.status === 'processing'}
+                    onClick={handleSendMessage}
+                    disabled={!input.trim() || agentState.status === 'processing' || !callId}
+                    aria-label={isLoading ? 'Sending message...' : 'Send message'}
                   >
-                    <Send size={18} />
+                    {isLoading ? <Loader2 size={18} className={styles.spinning} aria-hidden="true" /> : <Send size={18} aria-hidden="true" />}
                   </button>
                 </div>
-                <button className={styles.endButton} onClick={endCall}>
-                  <PhoneOff size={18} />
+                
+                <button 
+                  className={styles.endButton} 
+                  onClick={handleEndCall}
+                  disabled={isLoading}
+                  aria-label="End call"
+                >
+                  <PhoneOff size={18} aria-hidden="true" />
                   End Call
                 </button>
               </div>
@@ -562,10 +790,30 @@ export function CallSimulator() {
             <div className={styles.statusHeader}>
               <span className={`${styles.statusBadge} ${styles[agentState.status]}`}>
                 {agentState.status === 'idle' && 'Idle'}
+                {agentState.status === 'connecting' && '◌ Connecting'}
                 {agentState.status === 'listening' && '● Listening'}
                 {agentState.status === 'processing' && '◌ Processing'}
                 {agentState.status === 'speaking' && '◉ Speaking'}
+                {agentState.status === 'error' && '✕ Error'}
               </span>
+            </div>
+          </div>
+
+          {/* Voice Status */}
+          <div className={styles.statusCard}>
+            <div className={styles.cardLabel}>
+              <Mic size={14} />
+              Voice Status
+            </div>
+            <div className={styles.voiceStatus}>
+              <div className={styles.voiceIndicator}>
+                <span className={`${styles.voiceDot} ${isListening ? styles.active : ''}`} />
+                <span>{isListening ? 'Recording' : 'Ready'}</span>
+              </div>
+              <div className={styles.voiceIndicator}>
+                <span className={`${styles.voiceDot} ${ttsEnabled ? styles.active : ''}`} />
+                <span>{ttsEnabled ? 'TTS On' : 'TTS Off'}</span>
+              </div>
             </div>
           </div>
 
@@ -602,7 +850,7 @@ export function CallSimulator() {
               <div className={styles.detectionItem}>
                 <span className={styles.detectionLabel}>Intent</span>
                 <span className={styles.detectionValue}>
-                  {agentState.intent?.replace('_', ' ') || '—'}
+                  {agentState.intent?.replace(/_/g, ' ') || '—'}
                 </span>
               </div>
               <div className={styles.detectionItem}>
@@ -629,7 +877,7 @@ export function CallSimulator() {
                 <>
                   <span className={styles.escalationBadge}>
                     <AlertTriangle size={12} />
-                    Escalation Recommended
+                    {agentState.escalationType || 'Escalation Recommended'}
                   </span>
                   <span className={styles.escalationReason}>
                     {agentState.escalationReason}
@@ -663,6 +911,19 @@ export function CallSimulator() {
               </div>
             </div>
           </div>
+
+          {/* Call ID */}
+          {callId && (
+            <div className={styles.statusCard}>
+              <div className={styles.cardLabel}>
+                <Wifi size={14} />
+                Call ID
+              </div>
+              <div className={styles.callIdValue}>
+                {callId.slice(0, 8)}...
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

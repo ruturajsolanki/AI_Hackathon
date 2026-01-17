@@ -22,6 +22,56 @@
   font-size: 0.9rem;
   color: var(--color-text-muted);
   margin: var(--space-xs) 0 0 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.lastUpdated {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  padding: 2px 8px;
+  background-color: var(--color-bg-tertiary);
+  border-radius: var(--radius-sm);
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.refreshButton {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background-color: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.refreshButton:hover:not(:disabled) {
+  background-color: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.refreshButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .liveIndicator {
@@ -45,12 +95,228 @@
   animation: pulse 2s ease-in-out infinite;
 }
 
+/* Error Banner */
+.errorBanner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-md);
+  color: var(--color-accent-danger);
+  font-size: 0.9rem;
+}
+
+.errorBanner button {
+  margin-left: auto;
+  padding: var(--space-xs) var(--space-md);
+  background-color: var(--color-accent-danger);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: white;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+/* Stats Grid */
 .statsGrid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: var(--space-lg);
 }
 
+/* Charts Grid */
+.chartsGrid {
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr;
+  gap: var(--space-lg);
+}
+
+/* Donut Chart */
+.donutChart {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-lg);
+  padding: var(--space-md);
+}
+
+.donut {
+  position: relative;
+  width: 140px;
+  height: 140px;
+}
+
+.donutSvg {
+  width: 100%;
+  height: 100%;
+}
+
+.donutSegment {
+  transition: stroke-dasharray 0.5s ease-out;
+}
+
+.donutCenter {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.donutValue {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.donutLabel {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.donutLegend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  width: 100%;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.legendDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.legendItem strong {
+  margin-left: auto;
+  color: var(--color-text-primary);
+}
+
+/* Bar Chart */
+.barChart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  height: 200px;
+}
+
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-xs);
+  flex: 1;
+}
+
+.barWrapper {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+
+.bar {
+  width: 100%;
+  background: var(--gradient-primary);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  min-height: 4px;
+  position: relative;
+  animation: barGrow 0.5s ease-out forwards;
+  transform-origin: bottom;
+}
+
+@keyframes barGrow {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.barValue {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.barWrapper:hover .barValue {
+  opacity: 1;
+}
+
+.barWrapper:hover .bar {
+  opacity: 0.8;
+}
+
+.barChartLabels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  padding: 0 var(--space-xs);
+}
+
+/* Gauge Chart */
+.confidenceGauge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-lg);
+}
+
+.gauge {
+  width: 160px;
+  height: 100px;
+}
+
+.gaugeSvg {
+  width: 100%;
+  height: 100%;
+}
+
+.gaugeArc {
+  transition: stroke-dasharray 0.5s ease-out;
+}
+
+.gaugeNeedle {
+  transition: transform 0.5s ease-out;
+}
+
+.gaugeInfo {
+  text-align: center;
+  margin-top: var(--space-md);
+}
+
+.gaugeValue {
+  display: block;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.gaugeLabel {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+/* Main Grid */
 .mainGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -105,6 +371,11 @@
   padding: var(--space-md);
   background-color: var(--color-bg-tertiary);
   border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.quickStat:hover {
+  background-color: var(--color-bg-hover);
 }
 
 .quickStatIcon {
@@ -121,6 +392,13 @@
 .quickStatContent {
   display: flex;
   flex-direction: column;
+  flex: 1;
+}
+
+.quickStatValueRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
 }
 
 .quickStatValue {
@@ -129,15 +407,57 @@
   color: var(--color-text-primary);
 }
 
+.quickStatTrend {
+  display: flex;
+  align-items: center;
+}
+
+.quickStatTrend.up {
+  color: var(--color-accent-success);
+}
+
+.quickStatTrend.down {
+  color: var(--color-accent-danger);
+}
+
 .quickStatLabel {
   font-size: 0.8rem;
   color: var(--color-text-muted);
 }
 
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 /* Responsive */
+@media (max-width: 1400px) {
+  .chartsGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .chartsGrid > *:last-child {
+    grid-column: span 2;
+  }
+}
+
 @media (max-width: 1200px) {
   .statsGrid {
     grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .chartsGrid {
+    grid-template-columns: 1fr;
+  }
+  
+  .chartsGrid > *:last-child {
+    grid-column: span 1;
   }
   
   .mainGrid,
@@ -154,5 +474,10 @@
   .header {
     flex-direction: column;
     gap: var(--space-md);
+  }
+  
+  .headerActions {
+    width: 100%;
+    justify-content: space-between;
   }
 }

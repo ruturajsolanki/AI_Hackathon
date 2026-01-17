@@ -11,19 +11,19 @@ import {
 import styles from './Sidebar.module.css'
 
 const navItems = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/demo', icon: MessageSquare, label: 'Live Demo' },
-  { to: '/interactions', icon: Headphones, label: 'Interactions', disabled: true },
-  { to: '/agents', icon: Users, label: 'Agents', disabled: true },
-  { to: '/analytics', icon: BarChart3, label: 'Analytics', disabled: true },
-  { to: '/settings', icon: Settings, label: 'Settings', disabled: true },
+  { to: '/', icon: LayoutDashboard, label: 'Dashboard', description: 'View analytics overview' },
+  { to: '/demo', icon: MessageSquare, label: 'Live Demo', description: 'Interactive call simulation' },
+  { to: '/interactions', icon: Headphones, label: 'Interactions', disabled: true, description: 'Coming soon' },
+  { to: '/agents', icon: Users, label: 'Agents', disabled: true, description: 'Coming soon' },
+  { to: '/analytics', icon: BarChart3, label: 'Analytics', disabled: true, description: 'Coming soon' },
+  { to: '/settings', icon: Settings, label: 'Settings', disabled: true, description: 'Coming soon' },
 ]
 
 export function Sidebar() {
   return (
-    <aside className={styles.sidebar}>
+    <aside className={styles.sidebar} role="navigation" aria-label="Main navigation">
       <div className={styles.logo}>
-        <div className={styles.logoIcon}>
+        <div className={styles.logoIcon} aria-hidden="true">
           <Zap size={24} />
         </div>
         <div className={styles.logoText}>
@@ -32,8 +32,8 @@ export function Sidebar() {
         </div>
       </div>
       
-      <nav className={styles.nav}>
-        {navItems.map(({ to, icon: Icon, label, disabled }) => (
+      <nav className={styles.nav} aria-label="Primary">
+        {navItems.map(({ to, icon: Icon, label, disabled, description }) => (
           <NavLink
             key={to}
             to={disabled ? '#' : to}
@@ -41,17 +41,24 @@ export function Sidebar() {
               `${styles.navItem} ${isActive && !disabled ? styles.active : ''} ${disabled ? styles.disabled : ''}`
             }
             onClick={disabled ? (e) => e.preventDefault() : undefined}
+            aria-disabled={disabled}
+            aria-current={!disabled ? 'page' : undefined}
+            title={description}
           >
-            <Icon size={20} />
+            <Icon size={20} aria-hidden="true" />
             <span>{label}</span>
-            {disabled && <span className={styles.badge}>Soon</span>}
+            {disabled && (
+              <span className={styles.badge} aria-label="Coming soon">
+                Soon
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>
       
       <div className={styles.footer}>
-        <div className={styles.status}>
-          <span className={styles.statusDot} />
+        <div className={styles.status} role="status" aria-live="polite">
+          <span className={styles.statusDot} aria-hidden="true" />
           <span>System Operational</span>
         </div>
       </div>

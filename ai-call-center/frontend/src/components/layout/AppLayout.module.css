@@ -4,6 +4,28 @@
   background-color: var(--color-bg-primary);
 }
 
+/* Skip link for accessibility */
+.skipLink {
+  position: absolute;
+  top: -100%;
+  left: var(--space-md);
+  background: var(--color-accent-primary);
+  color: white;
+  padding: var(--space-sm) var(--space-lg);
+  z-index: 9999;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-decoration: none;
+  transition: top var(--transition-fast);
+}
+
+.skipLink:focus {
+  top: 0;
+  outline: 2px solid white;
+  outline-offset: 2px;
+}
+
 .main {
   flex: 1;
   display: flex;

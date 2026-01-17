@@ -59,27 +59,37 @@ export function ChatDemoPage() {
   }
 
   return (
-    <div className={styles.page}>
-      <div className={styles.header}>
+    <div className={styles.page} role="region" aria-label="Live Demo">
+      <header className={styles.header}>
         <div>
           <h1 className={styles.title}>Live Demo</h1>
           <p className={styles.subtitle}>Interactive demonstration of autonomous AI agents</p>
         </div>
         <div className={styles.controls}>
-          <Badge variant={isConnected ? 'success' : 'danger'}>
+          <Badge 
+            variant={isConnected ? 'success' : 'danger'}
+            aria-label={isConnected ? 'Connection status: Connected' : 'Connection status: Disconnected'}
+          >
             {isConnected ? 'Connected' : 'Disconnected'}
           </Badge>
           <button 
             className={styles.controlButton}
             onClick={() => setIsConnected(!isConnected)}
+            aria-label={isConnected ? 'Disconnect call' : 'Connect call'}
+            title={isConnected ? 'Disconnect' : 'Connect'}
           >
-            {isConnected ? <PhoneOff size={18} /> : <Phone size={18} />}
+            {isConnected ? <PhoneOff size={18} aria-hidden="true" /> : <Phone size={18} aria-hidden="true" />}
           </button>
-          <button className={styles.controlButton} onClick={handleReset}>
-            <RotateCcw size={18} />
+          <button 
+            className={styles.controlButton} 
+            onClick={handleReset}
+            aria-label="Reset conversation"
+            title="Reset conversation"
+          >
+            <RotateCcw size={18} aria-hidden="true" />
           </button>
         </div>
-      </div>
+      </header>
       
       <div className={styles.content}>
         <div className={styles.chatSection}>
@@ -108,7 +118,11 @@ export function ChatDemoPage() {
             </div>
             
             <div className={styles.inputContainer}>
+              <label htmlFor="chat-input" className={styles.srOnly}>
+                Type your message
+              </label>
               <input
+                id="chat-input"
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -116,16 +130,23 @@ export function ChatDemoPage() {
                 placeholder="Type your message..."
                 className={styles.input}
                 disabled={!isConnected || isProcessing}
+                aria-label="Type your message"
               />
-              <button className={styles.voiceButton} disabled>
-                <Mic size={18} />
+              <button 
+                className={styles.voiceButton} 
+                disabled
+                aria-label="Voice input (coming soon)"
+                title="Voice input coming soon"
+              >
+                <Mic size={18} aria-hidden="true" />
               </button>
               <button 
                 className={styles.sendButton}
                 onClick={handleSend}
                 disabled={!input.trim() || !isConnected || isProcessing}
+                aria-label="Send message"
               >
-                <Send size={18} />
+                <Send size={18} aria-hidden="true" />
               </button>
             </div>
           </Card>
