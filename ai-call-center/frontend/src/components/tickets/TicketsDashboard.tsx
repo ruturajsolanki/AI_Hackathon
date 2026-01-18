@@ -87,6 +87,7 @@ export function TicketsDashboard() {
 
   const handleAcceptTicket = async (ticketId: string) => {
     setAccepting(true)
+    setError(null)
     try {
       const response = await fetch(`${API_BASE}/tickets/${ticketId}/accept`, {
         method: 'POST',
@@ -99,13 +100,26 @@ export function TicketsDashboard() {
       
       if (response.ok) {
         const data = await response.json()
+        // Extract session ID from URL
+        const sessionId = data.session_url.split('/').pop()
         // Navigate to the live session
-        navigate(`/session/${data.session_url.split('/').pop()}`)
+        navigate(`/session/${sessionId}`)
+      } else {
+        const errorData = await response.json()
+        setError(errorData.detail || 'Failed to accept ticket')
       }
     } catch (err) {
-      setError('Failed to accept ticket')
+      setError('Failed to accept ticket. Please try again.')
     } finally {
       setAccepting(false)
+    }
+  }
+  
+  // Open session directly if already accepted
+  const handleOpenSession = (sessionUrl: string | null) => {
+    if (sessionUrl) {
+      const sessionId = sessionUrl.split('/').pop()
+      navigate(`/session/${sessionId}`)
     }
   }
 
@@ -231,7 +245,7 @@ export function TicketsDashboard() {
                   Ticket #{selectedTicket.ticket_id.slice(0, 8)}
                 </p>
               </div>
-              {selectedTicket.status === 'pending' && (
+              {selectedTicket.status === 'pending' ? (
                 <button
                   className={styles.acceptButton}
                   onClick={() => handleAcceptTicket(selectedTicket.ticket_id)}
@@ -239,7 +253,14 @@ export function TicketsDashboard() {
                 >
                   {accepting ? 'Accepting...' : '✓ Accept Ticket'}
                 </button>
-              )}
+              ) : selectedTicket.status === 'accepted' && selectedTicket.session_url ? (
+                <button
+                  className={styles.openSessionButton}
+                  onClick={() => handleOpenSession(selectedTicket.session_url)}
+                >
+                  📞 Open Live Session
+                </button>
+              ) : null}
             </div>
 
             {/* Issue Summary */}

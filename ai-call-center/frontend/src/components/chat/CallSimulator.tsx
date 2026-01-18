@@ -606,34 +606,39 @@ export function CallSimulator() {
 
   // Handle escalation to human agent
   const handleEscalateToHuman = async () => {
-    // Stop any ongoing speech/listening
+    // Stop any ongoing speech/listening and disable continuous mode
     stopSpeech()
     if (isListening) stopListening()
+    setContinuousVoiceMode(false) // Stop auto-listening
     
     setIsEscalated(true)
     setShowEscalationPanel(true)
+    
+    // Update agent state to show escalation
+    setAgentState(prev => ({
+      ...prev,
+      status: 'idle', // No longer listening
+      shouldEscalate: true,
+    }))
     
     addMessage({
       role: 'system',
       content: '🔄 Transferring to human agent... Please hold.',
     })
     
-    // Simulate human agent joining after a delay
-    setTimeout(() => {
-      addMessage({
-        role: 'system',
-        content: '✅ A human agent has joined the call. You are now speaking with a live representative.',
-      })
-      
-      // Add a simulated human response
-      setTimeout(() => {
-        addMessage({
-          role: 'agent',
-          content: "Hi there! I'm a human agent. I've reviewed the AI's notes about your issue. How can I help you resolve this today?",
-          metadata: { isHuman: true },
-        })
-      }, 2000)
-    }, 3000)
+    // End the AI call session
+    if (callId) {
+      await endCall(callId)
+    }
+    
+    addMessage({
+      role: 'system',
+      content: '✅ Call transferred to human agent. Open the Tickets page to view and accept this ticket.',
+    })
+    
+    // Reset call state
+    setIsCallActive(false)
+    setCallId(null)
   }
   
   // Close escalation panel and continue with human
