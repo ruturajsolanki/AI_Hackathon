@@ -339,13 +339,28 @@ async def accept_ticket(
     ticket.assigned_agent_id = request.agent_id
     ticket.assigned_agent_name = request.agent_name
     
-    # Generate unique session URL
-    session_id = uuid4()
+    # Use interaction_id as session ID so customer and agent share same session
+    session_id = ticket.interaction_id
     ticket.session_url = f"/session/{session_id}"
     ticket.session_active = True
     
-    # Store session mapping
+    # Store session mapping (use string for consistency)
     _session_to_ticket[session_id] = ticket_id
+    
+    # Initialize session with agent info
+    session_id_str = str(session_id)
+    if session_id_str not in _sessions:
+        _sessions[session_id_str] = {
+            "is_active": True,
+            "agent_connected": True,
+            "agent_name": request.agent_name,
+            "customer_connected": True,
+            "messages": [],
+        }
+    else:
+        _sessions[session_id_str]["agent_connected"] = True
+        _sessions[session_id_str]["agent_name"] = request.agent_name
+        _sessions[session_id_str]["is_active"] = True
     
     logger.info(f"Ticket {ticket_id} accepted by agent {request.agent_name}")
     

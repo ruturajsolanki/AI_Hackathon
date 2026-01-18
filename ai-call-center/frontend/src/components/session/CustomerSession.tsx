@@ -1,15 +1,16 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
+import { Send, Mic, MicOff, Volume2, VolumeX, Headphones } from 'lucide-react'
 import styles from './CustomerSession.module.css'
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition'
-import { speak, stop as stopSpeech } from '../../utils/speechSynthesis'
+import { speak, stop as stopSpeech, isSupported as isTTSSupported } from '../../utils/speechSynthesis'
 
 interface Message {
   id: string
   role: 'customer' | 'agent' | 'system'
   content: string
   timestamp: Date
-  isHuman?: boolean
+  is_human?: boolean
 }
 
 const API_BASE = 'http://localhost:8000/api'
@@ -22,15 +23,19 @@ export function CustomerSession() {
   const [isWaiting, setIsWaiting] = useState(true)
   const [agentName, setAgentName] = useState<string | null>(null)
   const [isSending, setIsSending] = useState(false)
+  const [ttsEnabled, setTtsEnabled] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const lastMessageCountRef = useRef(0)
   
   // Voice input
   const {
     isListening,
+    isSupported: isSTTSupported,
     interimTranscript,
     capturedText,
     startListening,
     stopListening,
+    clearTranscript,
     error: voiceError,
   } = useSpeechRecognition({
     continuous: false,
@@ -42,7 +47,7 @@ export function CustomerSession() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Check session status
+  // Check session status and poll for agent connection
   useEffect(() => {
     const checkSession = async () => {
       try {
@@ -50,7 +55,10 @@ export function CustomerSession() {
         if (response.ok) {
           const data = await response.json()
           setIsConnected(data.is_active)
-          setIsWaiting(!data.agent_connected)
+          
+          const agentConnected = data.agent_connected
+          setIsWaiting(!agentConnected)
+          
           if (data.agent_name) {
             setAgentName(data.agent_name)
           }
@@ -61,7 +69,7 @@ export function CustomerSession() {
     }
 
     checkSession()
-    const interval = setInterval(checkSession, 3000)
+    const interval = setInterval(checkSession, 2000)
     return () => clearInterval(interval)
   }, [sessionId])
 
@@ -73,13 +81,24 @@ export function CustomerSession() {
         if (response.ok) {
           const data = await response.json()
           if (data.messages && data.messages.length > 0) {
-            setMessages(data.messages.map((m: any) => ({
+            const newMessages = data.messages.map((m: any) => ({
               id: m.id || crypto.randomUUID(),
-              role: m.role,
+              role: m.role as 'customer' | 'agent' | 'system',
               content: m.content,
               timestamp: new Date(m.timestamp),
-              isHuman: m.is_human,
-            })))
+              is_human: m.is_human,
+            }))
+            
+            setMessages(newMessages)
+            
+            // Speak new agent messages
+            if (ttsEnabled && newMessages.length > lastMessageCountRef.current) {
+              const lastMessage = newMessages[newMessages.length - 1]
+              if (lastMessage.role === 'agent') {
+                speak(lastMessage.content)
+              }
+            }
+            lastMessageCountRef.current = newMessages.length
           }
         }
       } catch (err) {
@@ -88,62 +107,36 @@ export function CustomerSession() {
     }
 
     fetchMessages()
-    const interval = setInterval(fetchMessages, 2000)
+    const interval = setInterval(fetchMessages, 1500)
     return () => clearInterval(interval)
-  }, [sessionId])
+  }, [sessionId, ttsEnabled])
 
-  // Handle voice input
+  // Handle voice input capture
   useEffect(() => {
     if (capturedText && !isListening) {
       setInput(capturedText)
+      clearTranscript()
     }
-  }, [capturedText, isListening])
+  }, [capturedText, isListening, clearTranscript])
 
-  // Speak agent messages
-  useEffect(() => {
-    const lastMessage = messages[messages.length - 1]
-    if (lastMessage && lastMessage.role === 'agent' && lastMessage.isHuman) {
-      speak(lastMessage.content)
-    }
-  }, [messages])
-
-  const addMessage = (message: Omit<Message, 'id' | 'timestamp'>) => {
-    setMessages(prev => [...prev, {
-      ...message,
-      id: crypto.randomUUID(),
-      timestamp: new Date(),
-    }])
-  }
-
-  const handleSend = async () => {
+  const handleSendMessage = async () => {
     if (!input.trim() || isSending) return
-
-    const messageText = input.trim()
+    
+    const message = input.trim()
     setInput('')
     setIsSending(true)
-
-    // Add customer message locally
-    addMessage({
-      role: 'customer',
-      content: messageText,
-    })
-
+    
     try {
-      // Send to backend
       await fetch(`${API_BASE}/session/${sessionId}/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           role: 'customer',
-          content: messageText,
+          content: message,
         }),
       })
     } catch (err) {
       console.error('Failed to send message:', err)
-      addMessage({
-        role: 'system',
-        content: 'Failed to send message. Please try again.',
-      })
     } finally {
       setIsSending(false)
     }
@@ -152,131 +145,149 @@ export function CustomerSession() {
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      handleSend()
+      handleSendMessage()
     }
   }
 
-  const toggleVoice = () => {
+  const toggleMicrophone = () => {
     if (isListening) {
       stopListening()
     } else {
       stopSpeech()
+      clearTranscript()
       startListening()
     }
   }
 
   return (
     <div className={styles.container}>
-      <div className={styles.sessionCard}>
-        {/* Header */}
-        <header className={styles.header}>
-          <div className={styles.headerInfo}>
-            <h1>Support Session</h1>
-            <p className={styles.sessionId}>Session: {sessionId?.slice(0, 8)}...</p>
-          </div>
-          <div className={styles.connectionStatus}>
-            {isWaiting ? (
-              <span className={styles.waiting}>
-                <span className={styles.pulse}></span>
-                Waiting for agent...
-              </span>
-            ) : (
-              <span className={styles.connected}>
-                <span className={styles.dot}></span>
-                Connected{agentName ? ` with ${agentName}` : ''}
-              </span>
-            )}
-          </div>
-        </header>
-
-        {/* Messages */}
-        <div className={styles.messagesContainer}>
-          {isWaiting && messages.length === 0 && (
-            <div className={styles.waitingMessage}>
-              <div className={styles.waitingIcon}>🎧</div>
-              <h2>Your call has been escalated</h2>
-              <p>A human support agent will join shortly.</p>
-              <p className={styles.waitingHint}>Please keep this window open.</p>
-            </div>
-          )}
-
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`${styles.message} ${styles[message.role]}`}
-            >
-              <div className={styles.messageHeader}>
-                <span className={styles.messageRole}>
-                  {message.role === 'customer' ? '👤 You' : 
-                   message.role === 'agent' ? '🧑‍💼 Agent' : '📢 System'}
-                </span>
-                <span className={styles.messageTime}>
-                  {message.timestamp.toLocaleTimeString()}
-                </span>
-              </div>
-              <p className={styles.messageContent}>{message.content}</p>
-            </div>
-          ))}
-          <div ref={messagesEndRef} />
+      {/* Header */}
+      <header className={styles.header}>
+        <div className={styles.headerIcon}>
+          <Headphones size={24} />
         </div>
-
-        {/* Input Area */}
-        <div className={styles.inputArea}>
-          {voiceError && (
-            <div className={styles.voiceError}>{voiceError}</div>
-          )}
-          
-          <div className={styles.inputRow}>
-            <button
-              className={`${styles.voiceButton} ${isListening ? styles.listening : ''}`}
-              onClick={toggleVoice}
-              title={isListening ? 'Stop listening' : 'Start voice input'}
-            >
-              {isListening ? '🔴' : '🎤'}
-            </button>
-            
-            <input
-              type="text"
-              className={styles.input}
-              placeholder={isWaiting ? 'Waiting for agent to connect...' : 'Type your message...'}
-              value={isListening ? interimTranscript : input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyPress={handleKeyPress}
-              disabled={isWaiting || isSending}
-            />
-            
-            <button
-              className={styles.sendButton}
-              onClick={handleSend}
-              disabled={!input.trim() || isWaiting || isSending}
-            >
-              {isSending ? '...' : 'Send'}
-            </button>
+        <div className={styles.headerInfo}>
+          <h1>Support Session</h1>
+          <p className={styles.sessionId}>Session: {sessionId?.slice(0, 8)}...</p>
+        </div>
+        {isWaiting ? (
+          <div className={styles.waitingBadge}>
+            <span className={styles.waitingDot} />
+            Waiting for agent...
           </div>
-          
-          {isListening && (
-            <div className={styles.listeningIndicator}>
-              🎤 Listening... Speak now
+        ) : (
+          <div className={styles.connectedBadge}>
+            <span className={styles.connectedDot} />
+            {agentName || 'Agent'} connected
+          </div>
+        )}
+      </header>
+
+      {/* Waiting Overlay */}
+      {isWaiting && (
+        <div className={styles.waitingOverlay}>
+          <div className={styles.waitingContent}>
+            <div className={styles.waitingSpinner} />
+            <h2>Connecting you to a human agent...</h2>
+            <p>Please wait while an agent accepts your ticket.</p>
+            <p className={styles.waitingHint}>You can start typing your message below.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Chat Area */}
+      <div className={styles.chatArea}>
+        {/* Messages */}
+        <div className={styles.messages}>
+          {messages.length === 0 && !isWaiting ? (
+            <div className={styles.emptyState}>
+              <p>No messages yet. Say hello to the agent!</p>
             </div>
+          ) : (
+            messages.map((message) => (
+              <div
+                key={message.id}
+                className={`${styles.message} ${styles[message.role]}`}
+              >
+                <div className={styles.messageHeader}>
+                  <span className={styles.messageRole}>
+                    {message.role === 'customer' ? '👤 You' : 
+                     message.role === 'agent' ? `🧑‍💼 ${agentName || 'Agent'}` : '📢 System'}
+                  </span>
+                  <span className={styles.messageTime}>
+                    {message.timestamp.toLocaleTimeString([], { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    })}
+                  </span>
+                </div>
+                <p className={styles.messageContent}>{message.content}</p>
+              </div>
+            ))
           )}
+          <div ref={messagesEndRef} />
         </div>
       </div>
 
-      {/* Share Link */}
-      <div className={styles.shareSection}>
-        <p>Session Link (share if needed):</p>
-        <code className={styles.shareLink}>
-          {window.location.href}
-        </code>
-        <button
-          className={styles.copyButton}
-          onClick={() => {
-            navigator.clipboard.writeText(window.location.href)
-            alert('Link copied!')
-          }}
-        >
-          Copy Link
-        </button>
+      {/* Input Area */}
+      <div className={styles.inputArea}>
+        <div className={styles.inputControls}>
+          {/* TTS Toggle */}
+          {isTTSSupported() && (
+            <button
+              className={`${styles.controlButton} ${!ttsEnabled ? styles.muted : ''}`}
+              onClick={() => {
+                if (ttsEnabled) stopSpeech()
+                setTtsEnabled(!ttsEnabled)
+              }}
+              title={ttsEnabled ? 'Mute agent voice' : 'Unmute agent voice'}
+            >
+              {ttsEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
+            </button>
+          )}
+          
+          {/* Mic Button */}
+          {isSTTSupported && (
+            <button
+              className={`${styles.controlButton} ${isListening ? styles.listening : ''}`}
+              onClick={toggleMicrophone}
+              title={isListening ? 'Stop recording' : 'Start voice input'}
+            >
+              {isListening ? <MicOff size={20} /> : <Mic size={20} />}
+            </button>
+          )}
+        </div>
+        
+        <div className={styles.inputRow}>
+          <input
+            type="text"
+            value={isListening ? interimTranscript || input : input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder={isListening ? 'Listening...' : 'Type your message...'}
+            className={styles.input}
+            disabled={isSending}
+          />
+          <button
+            className={styles.sendButton}
+            onClick={handleSendMessage}
+            disabled={!input.trim() || isSending}
+          >
+            <Send size={20} />
+          </button>
+        </div>
+        
+        {isListening && (
+          <div className={styles.listeningIndicator}>
+            🎤 Recording... Click mic to stop
+          </div>
+        )}
+        
+        {voiceError && (
+          <div className={styles.errorIndicator}>
+            ⚠️ {voiceError}
+          </div>
+        )}
       </div>
     </div>
   )

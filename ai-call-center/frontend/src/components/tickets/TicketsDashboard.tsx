@@ -100,8 +100,8 @@ export function TicketsDashboard() {
       
       if (response.ok) {
         const data = await response.json()
-        // Extract session ID from URL
-        const sessionId = data.session_url.split('/').pop()
+        // The session ID is the interaction_id (same as customer uses)
+        const sessionId = data.session_url?.split('/').pop() || ticketId
         // Navigate to the live session
         navigate(`/session/${sessionId}`)
       } else {

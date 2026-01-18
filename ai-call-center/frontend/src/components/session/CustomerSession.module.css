@@ -1,157 +1,205 @@
 .container {
-  min-height: 100vh;
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-}
-
-.sessionCard {
-  width: 100%;
-  max-width: 600px;
-  background: rgba(30, 41, 59, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
-  display: flex;
-  flex-direction: column;
-  height: 70vh;
-  max-height: 700px;
+  height: 100vh;
+  background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+  color: #e2e8f0;
 }
 
 /* Header */
 .header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 1.25rem 1.5rem;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
   background: rgba(0, 0, 0, 0.3);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.headerIcon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  border-radius: 12px;
+}
+
+.headerInfo {
+  flex: 1;
 }
 
 .headerInfo h1 {
   margin: 0;
   font-size: 1.25rem;
-  color: #f1f5f9;
   font-weight: 600;
+  color: #f1f5f9;
 }
 
 .sessionId {
   margin: 0.25rem 0 0 0;
   font-size: 0.75rem;
   color: #64748b;
-  font-family: 'Monaco', monospace;
+  font-family: monospace;
 }
 
-.connectionStatus {
-  font-size: 0.875rem;
-}
-
-.waiting {
+.waitingBadge,
+.connectedBadge {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.waitingBadge {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
   color: #fbbf24;
 }
 
-.pulse {
+.connectedBadge {
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #4ade80;
+}
+
+.waitingDot {
   width: 8px;
   height: 8px;
   background: #fbbf24;
   border-radius: 50%;
-  animation: pulse 1.5s infinite;
+  animation: blink 1s infinite;
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(1.2); }
-}
-
-.connected {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: #4ade80;
-}
-
-.dot {
+.connectedDot {
   width: 8px;
   height: 8px;
   background: #4ade80;
   border-radius: 50%;
+  animation: pulse 2s infinite;
 }
 
-/* Messages */
-.messagesContainer {
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* Waiting Overlay */
+.waitingOverlay {
+  position: absolute;
+  top: 80px;
+  left: 0;
+  right: 0;
+  bottom: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.9);
+  z-index: 10;
+}
+
+.waitingContent {
+  text-align: center;
+  padding: 2rem;
+}
+
+.waitingSpinner {
+  width: 60px;
+  height: 60px;
+  margin: 0 auto 1.5rem auto;
+  border: 4px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.waitingContent h2 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.5rem;
+  color: #f1f5f9;
+}
+
+.waitingContent p {
+  margin: 0;
+  color: #94a3b8;
+}
+
+.waitingHint {
+  margin-top: 1.5rem !important;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+/* Chat Area */
+.chatArea {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.messages {
   flex: 1;
   overflow-y: auto;
-  padding: 1rem 1.5rem;
+  padding: 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
 }
 
-.waitingMessage {
+.emptyState {
   flex: 1;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  text-align: center;
-  color: #94a3b8;
-}
-
-.waitingIcon {
-  font-size: 4rem;
-  margin-bottom: 1rem;
-}
-
-.waitingMessage h2 {
-  color: #e2e8f0;
-  margin-bottom: 0.5rem;
-  font-size: 1.25rem;
-}
-
-.waitingMessage p {
-  margin: 0.25rem 0;
-}
-
-.waitingHint {
-  font-size: 0.875rem;
   color: #64748b;
-  margin-top: 1rem !important;
 }
 
-/* Message Bubbles */
+/* Messages */
 .message {
-  max-width: 85%;
+  max-width: 75%;
   padding: 0.75rem 1rem;
   border-radius: 12px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .message.customer {
   align-self: flex-end;
   background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: white;
 }
 
 .message.agent {
   align-self: flex-start;
   background: rgba(255, 255, 255, 0.08);
-  color: #e2e8f0;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .message.system {
   align-self: center;
+  max-width: 90%;
   background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
   color: #fbbf24;
   font-size: 0.875rem;
-  border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
 .messageHeader {
@@ -183,41 +231,44 @@
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.voiceError {
-  padding: 0.5rem;
+.inputControls {
+  display: flex;
+  gap: 0.5rem;
   margin-bottom: 0.75rem;
-  background: rgba(239, 68, 68, 0.15);
+}
+
+.controlButton {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #e2e8f0;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.controlButton:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.controlButton.muted {
+  color: #64748b;
+}
+
+.controlButton.listening {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
   color: #f87171;
-  border-radius: 6px;
-  font-size: 0.8rem;
-  text-align: center;
+  animation: pulse 1s infinite;
 }
 
 .inputRow {
   display: flex;
   gap: 0.5rem;
-  align-items: center;
-}
-
-.voiceButton {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(255, 255, 255, 0.08);
-  font-size: 1.25rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  flex-shrink: 0;
-}
-
-.voiceButton:hover {
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.voiceButton.listening {
-  background: rgba(239, 68, 68, 0.3);
-  animation: pulse 1s infinite;
 }
 
 .input {
@@ -247,18 +298,21 @@
 }
 
 .sendButton {
-  padding: 0.75rem 1.5rem;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: white;
   border: none;
-  border-radius: 24px;
-  font-weight: 600;
+  border-radius: 50%;
+  color: white;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .sendButton:hover:not(:disabled) {
-  transform: translateY(-1px);
+  transform: scale(1.05);
   box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
 }
 
@@ -268,52 +322,33 @@
 }
 
 .listeningIndicator {
-  margin-top: 0.75rem;
+  margin-top: 0.5rem;
   text-align: center;
   color: #f87171;
   font-size: 0.875rem;
-  animation: pulse 1s infinite;
 }
 
-/* Share Section */
-.shareSection {
-  margin-top: 1.5rem;
-  padding: 1rem;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 8px;
+.errorIndicator {
+  margin-top: 0.5rem;
   text-align: center;
-  max-width: 600px;
-  width: 100%;
+  color: #fbbf24;
+  font-size: 0.875rem;
 }
 
-.shareSection p {
-  margin: 0 0 0.5rem 0;
-  color: #64748b;
-  font-size: 0.8rem;
-}
-
-.shareLink {
-  display: block;
-  padding: 0.5rem 1rem;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 6px;
-  color: #94a3b8;
-  font-size: 0.75rem;
-  word-break: break-all;
-  margin-bottom: 0.75rem;
-}
-
-.copyButton {
-  padding: 0.5rem 1rem;
-  background: rgba(255, 255, 255, 0.1);
-  color: #e2e8f0;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 6px;
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.copyButton:hover {
-  background: rgba(255, 255, 255, 0.15);
+/* Responsive */
+@media (max-width: 768px) {
+  .header {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  
+  .waitingBadge,
+  .connectedBadge {
+    font-size: 0.75rem;
+    padding: 0.375rem 0.75rem;
+  }
+  
+  .message {
+    max-width: 85%;
+  }
 }

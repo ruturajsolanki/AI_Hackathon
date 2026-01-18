@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Phone, PhoneOff, Send, Mic, MicOff, Volume2, VolumeX } from 'lucide-react'
+import { Phone, PhoneOff, Send, Mic, MicOff, Volume2, VolumeX, ArrowLeft } from 'lucide-react'
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition'
 import { speak, stop as stopSpeech, isSupported as isTTSSupported } from '../../utils/speechSynthesis'
 import styles from './LiveSession.module.css'
@@ -10,16 +10,7 @@ interface Message {
   role: 'customer' | 'agent' | 'system'
   content: string
   timestamp: Date
-}
-
-interface SessionInfo {
-  session_id: string
-  ticket_id: string
-  interaction_id: string
-  customer_name: string | null
-  issue_summary: string
-  agent_name: string | null
-  active: boolean
+  is_human?: boolean
 }
 
 const API_BASE = 'http://localhost:8000/api'
@@ -28,20 +19,24 @@ export function LiveSession() {
   const { sessionId } = useParams<{ sessionId: string }>()
   const navigate = useNavigate()
   
-  const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [ttsEnabled, setTtsEnabled] = useState(true)
+  const [isSending, setIsSending] = useState(false)
+  const [customerName, setCustomerName] = useState<string>('Customer')
+  const [issueSummary, setIssueSummary] = useState<string>('')
   
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const lastMessageCountRef = useRef(0)
   
   // Speech recognition for human agent voice input
   const {
     isListening,
     isSupported: isSTTSupported,
+    interimTranscript,
     capturedText,
     startListening,
     stopListening,
@@ -55,45 +50,94 @@ export function LiveSession() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [])
 
-  // Fetch session info
+  // Join session and mark agent as connected
   useEffect(() => {
-    const fetchSession = async () => {
+    const joinSession = async () => {
       if (!sessionId) return
       
       try {
-        const response = await fetch(`${API_BASE}/tickets/session/${sessionId}`)
-        if (response.ok) {
-          const data = await response.json()
-          setSessionInfo(data)
-          setIsConnected(data.active)
-          
-          // Add welcome message
-          setMessages([
-            {
-              id: 'welcome',
-              role: 'system',
-              content: `Connected to session. Customer: ${data.customer_name || 'Unknown'}. Issue: ${data.issue_summary}`,
-              timestamp: new Date(),
-            },
-            {
-              id: 'intro',
-              role: 'agent',
-              content: "Hi! I'm a human agent. I've reviewed your conversation with our AI assistant. How can I help you today?",
-              timestamp: new Date(),
-            },
-          ])
-        } else {
-          setError('Session not found')
+        // First, mark agent as joined
+        await fetch(`${API_BASE}/session/${sessionId}/agent-join?agent_name=Human Agent`, {
+          method: 'POST',
+        })
+        
+        // Get session status
+        const statusResponse = await fetch(`${API_BASE}/session/${sessionId}/status`)
+        if (statusResponse.ok) {
+          const statusData = await statusResponse.json()
+          setIsConnected(true)
+          setCustomerName(statusData.customer_name || 'Customer')
         }
+        
+        // Try to get ticket details for context
+        try {
+          // The sessionId is the interaction_id, so we can get ticket info
+          const ticketsResponse = await fetch(`${API_BASE}/tickets/pending`)
+          if (ticketsResponse.ok) {
+            const tickets = await ticketsResponse.json()
+            const ticket = tickets.find((t: any) => 
+              t.interaction_id === sessionId || 
+              t.ticket_id === sessionId
+            )
+            if (ticket) {
+              setCustomerName(ticket.customer_name || 'Customer')
+              setIssueSummary(ticket.issue_summary || '')
+            }
+          }
+        } catch {
+          // Ignore ticket fetch errors
+        }
+        
+        setLoading(false)
       } catch (err) {
-        setError('Failed to load session')
-      } finally {
+        console.error('Failed to join session:', err)
+        setError('Failed to connect to session')
         setLoading(false)
       }
     }
     
-    fetchSession()
+    joinSession()
   }, [sessionId])
+
+  // Poll for messages from customer
+  useEffect(() => {
+    if (!sessionId || !isConnected) return
+    
+    const fetchMessages = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/session/${sessionId}/messages`)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.messages && data.messages.length > 0) {
+            const newMessages = data.messages.map((m: any) => ({
+              id: m.id || crypto.randomUUID(),
+              role: m.role as 'customer' | 'agent' | 'system',
+              content: m.content,
+              timestamp: new Date(m.timestamp),
+              is_human: m.is_human,
+            }))
+            
+            setMessages(newMessages)
+            
+            // Speak new customer messages
+            if (ttsEnabled && newMessages.length > lastMessageCountRef.current) {
+              const lastMessage = newMessages[newMessages.length - 1]
+              if (lastMessage.role === 'customer') {
+                speak(lastMessage.content)
+              }
+            }
+            lastMessageCountRef.current = newMessages.length
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch messages:', err)
+      }
+    }
+    
+    fetchMessages()
+    const interval = setInterval(fetchMessages, 1500)
+    return () => clearInterval(interval)
+  }, [sessionId, isConnected, ttsEnabled])
 
   useEffect(() => {
     scrollToBottom()
@@ -107,54 +151,53 @@ export function LiveSession() {
     }
   }, [capturedText, isListening, clearTranscript])
 
-  const addMessage = (role: 'customer' | 'agent' | 'system', content: string) => {
-    setMessages(prev => [...prev, {
-      id: `${role}-${Date.now()}`,
-      role,
-      content,
-      timestamp: new Date(),
-    }])
-  }
-
   const handleSendMessage = async () => {
-    if (!input.trim()) return
+    if (!input.trim() || isSending) return
     
     const message = input.trim()
     setInput('')
-    
-    // Add agent message
-    addMessage('agent', message)
-    
-    // Speak if TTS enabled (for customer to hear)
-    if (ttsEnabled && isTTSSupported()) {
-      await speak(message)
-    }
-    
-    // Simulate customer response (in real app, this would come from WebSocket)
-    setTimeout(() => {
-      addMessage('customer', "Thank you for helping me with this. I really appreciate you taking the time.")
-    }, 2000 + Math.random() * 2000)
-  }
-
-  const handleEndSession = async () => {
-    if (!sessionInfo) return
+    setIsSending(true)
     
     try {
-      await fetch(`${API_BASE}/tickets/${sessionInfo.ticket_id}/resolve`, {
+      // Send message via API
+      await fetch(`${API_BASE}/session/${sessionId}/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          resolution_notes: 'Resolved by human agent',
-          resolution_type: 'resolved',
+          role: 'agent',
+          content: message,
         }),
       })
       
-      addMessage('system', 'Session ended. Ticket marked as resolved.')
+      // Speak if TTS enabled
+      if (ttsEnabled && isTTSSupported()) {
+        speak(message)
+      }
+    } catch (err) {
+      console.error('Failed to send message:', err)
+    } finally {
+      setIsSending(false)
+    }
+  }
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSendMessage()
+    }
+  }
+
+  const handleEndSession = async () => {
+    try {
+      await fetch(`${API_BASE}/session/${sessionId}/end?resolution=resolved`, {
+        method: 'POST',
+      })
+      
       setIsConnected(false)
       
       setTimeout(() => {
         navigate('/tickets')
-      }, 2000)
+      }, 1500)
     } catch {
       setError('Failed to end session')
     }
@@ -164,6 +207,7 @@ export function LiveSession() {
     if (isListening) {
       stopListening()
     } else {
+      stopSpeech()
       clearTranscript()
       startListening()
     }
@@ -197,109 +241,137 @@ export function LiveSession() {
     <div className={styles.container}>
       {/* Header */}
       <header className={styles.header}>
+        <button className={styles.backButton} onClick={() => navigate('/tickets')}>
+          <ArrowLeft size={20} />
+          Back
+        </button>
+        
         <div className={styles.headerInfo}>
-          <h1>
-            <Phone className={styles.phoneIcon} />
-            Live Session
-          </h1>
-          <p>
-            {sessionInfo?.customer_name || 'Customer'} • 
-            {isConnected ? ' 🟢 Connected' : ' 🔴 Disconnected'}
-          </p>
+          <h1>Live Session with {customerName}</h1>
+          <p className={styles.sessionId}>Session: {sessionId?.slice(0, 8)}...</p>
+          {issueSummary && (
+            <p className={styles.issueSummary}>Issue: {issueSummary}</p>
+          )}
         </div>
         
-        <div className={styles.headerActions}>
-          <button
-            className={styles.ttsButton}
-            onClick={() => setTtsEnabled(!ttsEnabled)}
-            title={ttsEnabled ? 'Disable TTS' : 'Enable TTS'}
-          >
-            {ttsEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
-          </button>
-          
-          <button
-            className={styles.endButton}
-            onClick={handleEndSession}
-          >
-            <PhoneOff size={18} />
-            End & Resolve
-          </button>
+        <div className={styles.connectionStatus}>
+          {isConnected ? (
+            <span className={styles.connected}>
+              <span className={styles.dot} />
+              Connected
+            </span>
+          ) : (
+            <span className={styles.disconnected}>
+              Disconnected
+            </span>
+          )}
         </div>
       </header>
 
-      {/* Issue Summary Banner */}
-      {sessionInfo && (
-        <div className={styles.summaryBanner}>
-          <span className={styles.summaryLabel}>Issue:</span>
-          <span className={styles.summaryText}>{sessionInfo.issue_summary}</span>
+      {/* Chat Area */}
+      <div className={styles.chatArea}>
+        {/* Welcome Banner */}
+        <div className={styles.welcomeBanner}>
+          <p>👋 You are now connected as a human agent. The customer can see your messages.</p>
         </div>
-      )}
-
-      {/* Messages */}
-      <div className={styles.messagesContainer}>
+        
+        {/* Messages */}
         <div className={styles.messages}>
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`${styles.message} ${styles[msg.role]}`}
-            >
-              <div className={styles.messageHeader}>
-                <span className={styles.messageRole}>
-                  {msg.role === 'customer' ? '👤 Customer' : 
-                   msg.role === 'agent' ? '🧑‍💼 You (Human Agent)' : '📢 System'}
-                </span>
-                <span className={styles.messageTime}>
-                  {msg.timestamp.toLocaleTimeString()}
-                </span>
-              </div>
-              <p className={styles.messageContent}>{msg.content}</p>
+          {messages.length === 0 ? (
+            <div className={styles.emptyState}>
+              <p>No messages yet. The customer will appear here when they connect.</p>
+              <p className={styles.hint}>Send a greeting to start the conversation!</p>
             </div>
-          ))}
+          ) : (
+            messages.map((message) => (
+              <div
+                key={message.id}
+                className={`${styles.message} ${styles[message.role]}`}
+              >
+                <div className={styles.messageHeader}>
+                  <span className={styles.messageRole}>
+                    {message.role === 'customer' ? `👤 ${customerName}` : 
+                     message.role === 'agent' ? '🧑‍💼 You (Agent)' : '📢 System'}
+                  </span>
+                  <span className={styles.messageTime}>
+                    {message.timestamp.toLocaleTimeString([], { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    })}
+                  </span>
+                </div>
+                <p className={styles.messageContent}>{message.content}</p>
+              </div>
+            ))
+          )}
           <div ref={messagesEndRef} />
         </div>
       </div>
 
       {/* Input Area */}
-      {isConnected && (
-        <div className={styles.inputArea}>
-          <div className={styles.inputRow}>
+      <div className={styles.inputArea}>
+        <div className={styles.inputControls}>
+          {/* TTS Toggle */}
+          <button
+            className={`${styles.controlButton} ${!ttsEnabled ? styles.muted : ''}`}
+            onClick={() => {
+              if (ttsEnabled) stopSpeech()
+              setTtsEnabled(!ttsEnabled)
+            }}
+            title={ttsEnabled ? 'Mute customer voice' : 'Unmute customer voice'}
+          >
+            {ttsEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
+          </button>
+          
+          {/* Mic Button */}
+          {isSTTSupported && (
             <button
-              className={`${styles.micButton} ${isListening ? styles.listening : ''}`}
+              className={`${styles.controlButton} ${isListening ? styles.listening : ''}`}
               onClick={toggleMicrophone}
-              disabled={!isSTTSupported}
-              title={isListening ? 'Stop listening' : 'Start voice input'}
+              title={isListening ? 'Stop recording' : 'Start voice input'}
             >
               {isListening ? <MicOff size={20} /> : <Mic size={20} />}
             </button>
-            
-            <input
-              type="text"
-              className={styles.input}
-              placeholder="Type a message to the customer..."
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-            />
-            
-            <button
-              className={styles.sendButton}
-              onClick={handleSendMessage}
-              disabled={!input.trim()}
-            >
-              <Send size={20} />
-            </button>
-          </div>
-          
-          {isListening && (
-            <div className={styles.listeningIndicator}>
-              <span className={styles.pulse} />
-              Listening... Speak now
-            </div>
           )}
         </div>
-      )}
+        
+        <div className={styles.inputRow}>
+          <input
+            type="text"
+            value={isListening ? interimTranscript || input : input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder={isListening ? 'Listening...' : 'Type your message to the customer...'}
+            className={styles.input}
+            disabled={!isConnected || isSending}
+          />
+          <button
+            className={styles.sendButton}
+            onClick={handleSendMessage}
+            disabled={!input.trim() || !isConnected || isSending}
+          >
+            <Send size={20} />
+          </button>
+        </div>
+        
+        {isListening && (
+          <div className={styles.listeningIndicator}>
+            🎤 Recording... Click mic to stop
+          </div>
+        )}
+      </div>
+
+      {/* End Session Button */}
+      <div className={styles.footer}>
+        <button
+          className={styles.endButton}
+          onClick={handleEndSession}
+          disabled={!isConnected}
+        >
+          <PhoneOff size={18} />
+          End Session & Resolve Ticket
+        </button>
+      </div>
     </div>
   )
 }
-
-export default LiveSession
