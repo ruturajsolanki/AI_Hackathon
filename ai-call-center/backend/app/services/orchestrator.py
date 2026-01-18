@@ -416,13 +416,25 @@ class CallOrchestrator:
         if state.is_escalated:
             logger.info(f"Interaction {interaction_id} already escalated - ignoring new message")
             
-            # Create a simple response indicating call is being transferred
+            # Import required types
+            from app.agents.base import ConfidenceReport
+            from app.core.models import DecisionType
+            
+            # Create a proper response indicating call is being transferred
             escalation_response = AgentOutput(
+                interaction_id=interaction_id,
                 agent_type=AgentType.ESCALATION,
+                decision_type=DecisionType.TRANSFER,
                 decision_summary="Your call is being transferred to a human agent. Please wait.",
-                proposed_response="Thank you for your patience. Your call has been escalated and a human agent will be with you shortly. Please check your session link to continue the conversation.",
-                confidence_score=1.0,
-                confidence_level=ConfidenceLevel.HIGH,
+                response_content="Thank you for your patience. Your call has been escalated and a human agent will be with you shortly. Please check your session link to continue the conversation.",
+                confidence=ConfidenceReport(
+                    overall_score=1.0,
+                    level=ConfidenceLevel.HIGH,
+                    intent_confidence=1.0,
+                    response_confidence=1.0,
+                    context_confidence=1.0,
+                    factors=["Call already escalated to human agent"],
+                ),
                 processing_time_ms=0,
             )
             
