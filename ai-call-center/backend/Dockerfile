@@ -23,12 +23,10 @@ COPY . .
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
+ENV PORT=8000
 
 # Expose port
 EXPOSE 8000
 
-# Create start script that handles PORT variable
-RUN echo '#!/bin/sh\nuvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}' > /start.sh && chmod +x /start.sh
-
-# Start using the shell script
-CMD ["/start.sh"]
+# Start directly with uvicorn (Railway sets PORT env var)
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
