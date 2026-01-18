@@ -23,7 +23,7 @@ python-multipart>=0.0.6
 # Config
 python-dotenv>=1.0.0
 
-# Semantic Search with Neural Embeddings
+# Semantic Search (torch installed separately in Dockerfile for CPU-only)
 sentence-transformers>=2.2.0
 numpy>=1.24.0
 pandas>=2.0.0
