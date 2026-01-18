@@ -230,6 +230,31 @@ export function TicketsDashboard() {
                     {ticket.status}
                   </span>
                 </div>
+                
+                {/* Quick Actions on Card */}
+                <div className={styles.ticketActions}>
+                  {ticket.status === 'pending' && (
+                    <button
+                      className={styles.acceptButtonSmall}
+                      onClick={(e) => {
+                        e.stopPropagation() // Prevent card click
+                        handleAcceptTicket(ticket.ticket_id)
+                      }}
+                      disabled={accepting}
+                    >
+                      {accepting ? 'Accepting...' : '✓ Accept'}
+                    </button>
+                  )}
+                  <button
+                    className={styles.viewButton}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      fetchTicketDetail(ticket.ticket_id)
+                    }}
+                  >
+                    View Details
+                  </button>
+                </div>
               </div>
             ))
           )}
