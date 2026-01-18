@@ -1044,7 +1044,7 @@ export interface AuthStatusResponse {
 
 const apiClient = new ApiClient({
   baseUrl: import.meta.env.VITE_API_URL ?? '',
-  timeout: 30000,
+  timeout: 120000, // 2 minutes for LLM processing (Primary + Supervisor agents)
 })
 
 // -----------------------------------------------------------------------------

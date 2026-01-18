@@ -527,13 +527,47 @@ class CallOrchestrator:
                 },
             )
             
-            # Step 9: Supervisor review
+            # Step 9: Supervisor review (FAST PATH: skip for high-confidence simple queries)
             state.current_phase = OrchestrationPhase.SUPERVISOR_REVIEW
             supervisor_start = datetime.now(timezone.utc)
-            supervisor_review = await self._invoke_supervisor_agent(
-                primary_output,
-                agent_input,
-            )
+            
+            # Fast path: Skip LLM-based supervisor review for high-confidence, low-risk responses
+            primary_confidence = primary_output.confidence.overall_score if primary_output.confidence else 0.5
+            is_high_confidence = primary_confidence >= 0.80
+            is_simple_query = primary_output.detected_intent in [
+                IntentCategory.ORDER_STATUS,
+                IntentCategory.GENERAL_INQUIRY,
+                IntentCategory.PRODUCT_INFORMATION,
+            ]
+            is_positive_emotion = primary_output.detected_emotion in [
+                EmotionalState.NEUTRAL,
+                EmotionalState.SATISFIED,
+            ]
+            
+            if is_high_confidence and is_simple_query and is_positive_emotion:
+                # Fast path: Auto-approve without LLM call
+                from app.agents.supervisor import RiskLevel, ComplianceStatus
+                supervisor_review = SupervisorReview(
+                    decision_id=str(primary_output.decision_id),
+                    interaction_id=str(interaction_id),
+                    approved=True,
+                    quality_score=0.85,
+                    tone_appropriate=True,
+                    compliance_status=ComplianceStatus.COMPLIANT,
+                    risk_level=RiskLevel.NONE,
+                    flags=[],
+                    adjusted_confidence=primary_confidence,
+                    recommendations=[],
+                    reasoning=["Fast-path: High confidence simple query auto-approved"],
+                )
+                logger.info(f"[Orchestrator] Fast-path supervisor approval for high-confidence query")
+            else:
+                # Full supervisor review with LLM
+                supervisor_review = await self._invoke_supervisor_agent(
+                    primary_output,
+                    agent_input,
+                )
+            
             supervisor_duration = int((datetime.now(timezone.utc) - supervisor_start).total_seconds() * 1000)
             
             state.supervisor_reviews.append(supervisor_review)
