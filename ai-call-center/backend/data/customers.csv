@@ -1,0 +1,21 @@
+customer_id,first_name,last_name,email,phone,membership_tier,account_created,last_purchase,total_orders,total_spent,loyalty_points,preferred_contact,language,timezone,notes
+CUST001,John,Smith,john.smith@email.com,+1-555-0101,gold,2022-03-15,2024-01-10,45,4520.00,2260,email,en,America/New_York,VIP customer - always expedite
+CUST002,Sarah,Johnson,sarah.j@email.com,+1-555-0102,platinum,2021-06-20,2024-01-15,120,15680.00,7840,phone,en,America/Los_Angeles,High-value customer - priority support
+CUST003,Michael,Williams,m.williams@email.com,+1-555-0103,silver,2023-01-05,2023-12-28,12,890.00,445,email,en,America/Chicago,New customer - nurture
+CUST004,Emily,Brown,emily.brown@email.com,+1-555-0104,bronze,2023-08-12,2023-11-15,3,245.00,122,sms,en,America/Denver,First-time caller
+CUST005,David,Jones,david.jones@email.com,+1-555-0105,gold,2022-01-01,2024-01-12,67,5230.00,2615,email,en,America/New_York,Prefers detailed explanations
+CUST006,Maria,Garcia,maria.g@email.com,+1-555-0106,platinum,2020-11-11,2024-01-14,200,28900.00,14450,phone,es,America/Los_Angeles,Spanish preferred - very loyal
+CUST007,James,Miller,james.miller@email.com,+1-555-0107,silver,2023-03-22,2023-12-20,8,620.00,310,email,en,America/Chicago,Technical user - knows products well
+CUST008,Jennifer,Davis,jen.davis@email.com,+1-555-0108,gold,2022-05-18,2024-01-08,52,4100.00,2050,email,en,America/New_York,Often buys gifts - suggest gift wrap
+CUST009,Robert,Martinez,r.martinez@email.com,+1-555-0109,bronze,2023-10-01,2023-12-25,2,180.00,90,sms,en,America/Phoenix,New customer
+CUST010,Lisa,Anderson,lisa.a@email.com,+1-555-0110,platinum,2021-02-14,2024-01-16,180,22500.00,11250,phone,en,America/New_York,Business account - needs invoices
+CUST011,William,Taylor,will.taylor@email.com,+1-555-0111,silver,2023-04-10,2023-11-30,6,450.00,225,email,en,America/Chicago,Student discount eligible
+CUST012,Patricia,Thomas,p.thomas@email.com,+1-555-0112,gold,2022-08-05,2024-01-11,38,3200.00,1600,email,en,America/Los_Angeles,Frequent returner - check sizing
+CUST013,Christopher,Jackson,c.jackson@email.com,+1-555-0113,bronze,2023-11-20,2023-12-15,1,89.00,44,email,en,America/Denver,First order
+CUST014,Nancy,White,nancy.white@email.com,+1-555-0114,platinum,2020-06-30,2024-01-13,250,35000.00,17500,phone,en,America/New_York,Top customer - white glove service
+CUST015,Daniel,Harris,dan.harris@email.com,+1-555-0115,silver,2023-02-28,2023-12-22,10,780.00,390,email,en,America/Chicago,Prefers eco-friendly options
+CUST016,Karen,Martin,karen.m@email.com,+1-555-0116,gold,2022-04-12,2024-01-09,42,3850.00,1925,email,en,America/Los_Angeles,Sensitive to shipping delays
+CUST017,Matthew,Thompson,matt.t@email.com,+1-555-0117,bronze,2023-09-15,2023-10-20,2,156.00,78,sms,en,America/Phoenix,Inactive - may need winback
+CUST018,Betty,Garcia,betty.garcia@email.com,+1-555-0118,platinum,2021-04-05,2024-01-15,165,21000.00,10500,phone,es,America/Los_Angeles,Spanish preferred - anniversary coming
+CUST019,Mark,Robinson,mark.r@email.com,+1-555-0119,silver,2023-05-08,2023-12-18,7,540.00,270,email,en,America/New_York,Tech-savvy - minimal hand-holding
+CUST020,Helen,Clark,helen.clark@email.com,+1-555-0120,gold,2022-07-22,2024-01-07,55,4800.00,2400,email,en,America/Chicago,Senior customer - patient approach

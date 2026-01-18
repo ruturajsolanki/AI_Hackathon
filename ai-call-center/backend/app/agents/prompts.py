@@ -187,17 +187,21 @@ PRIMARY_AGENT_USER_PROMPT_TEMPLATE = """## Customer Message
 ## Conversation History
 {conversation_history}
 
+## Knowledge Base Context
+{knowledge_context}
+
 ## Task
-Analyze the customer message and generate a response. Return a JSON object with:
+Analyze the customer message and generate a response using the knowledge base context above.
+Return a JSON object with:
 - intent: The detected intent category
 - emotion: The detected emotional state  
 - confidence: Your confidence score (0.0 to 1.0)
-- response: Your response to the customer
+- response: Your response to the customer (use knowledge base solutions when relevant)
 - reasoning: Array of reasoning steps
 - requires_clarification: Whether you need more information
 - suggested_actions: Any follow-up actions needed
 
-Remember: Only use information from the provided context. Do not invent details."""
+Remember: Use the knowledge base solutions and FAQs to provide accurate responses. Do not invent details."""
 
 
 # -----------------------------------------------------------------------------
@@ -339,6 +343,7 @@ def build_primary_prompt(
     previous_intent: str = "none",
     previous_emotion: str = "neutral",
     conversation_history: str = "No previous messages.",
+    knowledge_context: str = "No knowledge base context available.",
 ) -> str:
     """
     Build the user prompt for the Primary Agent.
@@ -350,6 +355,7 @@ def build_primary_prompt(
         previous_intent: Previously detected intent
         previous_emotion: Previously detected emotion
         conversation_history: Formatted conversation history
+        knowledge_context: Context from knowledge base (solutions, FAQs, customer info)
         
     Returns:
         Formatted user prompt string
@@ -361,6 +367,7 @@ def build_primary_prompt(
         previous_intent=previous_intent,
         previous_emotion=previous_emotion,
         conversation_history=conversation_history,
+        knowledge_context=knowledge_context,
     )
 
 

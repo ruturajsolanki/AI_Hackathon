@@ -44,6 +44,7 @@ from app.core.models import (
     EmotionalState,
     IntentCategory,
 )
+from app.services.knowledge_base import get_knowledge_base
 
 logger = logging.getLogger(__name__)
 
@@ -333,8 +334,14 @@ class PrimaryAgent(BaseAgent):
             return self._fallback_analysis(input_data.content)
         
         try:
-            # Build prompt
+            # Build prompt with knowledge base context
             conversation_history = self._format_context_history(input_data.context)
+            
+            # Get knowledge base context for the customer message
+            kb = get_knowledge_base()
+            customer_id = input_data.metadata.get("customer_id") if input_data.metadata else None
+            knowledge_context = kb.build_context_for_query(input_data.content, customer_id)
+            
             user_prompt = build_primary_prompt(
                 customer_message=input_data.content,
                 channel=input_data.metadata.get("channel", "chat"),
@@ -342,6 +349,7 @@ class PrimaryAgent(BaseAgent):
                 previous_intent=input_data.suggested_intent.value if input_data.suggested_intent else "none",
                 previous_emotion=input_data.suggested_emotion.value if input_data.suggested_emotion else "neutral",
                 conversation_history=conversation_history,
+                knowledge_context=knowledge_context if knowledge_context else "No specific knowledge base match found.",
             )
             
             # Create completion request

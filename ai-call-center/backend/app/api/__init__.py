@@ -14,6 +14,7 @@ from app.api.config import router as config_router
 from app.api.agent_config import router as agent_config_router
 from app.api.auth import router as auth_router
 from app.api.tickets import router as tickets_router
+from app.api.knowledge import router as knowledge_router
 
 # Create session router to expose session endpoints at /api/session
 from app.api.tickets import (
@@ -43,6 +44,7 @@ router.include_router(config_router)
 router.include_router(agent_config_router)
 router.include_router(tickets_router)
 router.include_router(session_router)  # Live session endpoints
+router.include_router(knowledge_router)  # Knowledge base endpoints
 
 
 @router.get("/", tags=["API"])
