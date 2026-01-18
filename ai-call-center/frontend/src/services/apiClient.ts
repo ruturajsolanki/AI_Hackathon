@@ -159,6 +159,54 @@ export interface InteractionDetail {
   resolutionSummary: string | null
 }
 
+// Agent Types
+export interface AgentCapability {
+  name: string
+  description: string
+}
+
+export interface DecisionScope {
+  autonomousActions: string[]
+  requiresReview: string[]
+  cannotPerform: string[]
+}
+
+export interface AgentMetadata {
+  agentId: string
+  name: string
+  type: string
+  description: string
+  status: string
+  responsibilities: string[]
+  capabilities: AgentCapability[]
+  decisionScope: DecisionScope
+  metrics: {
+    totalDecisions: number
+    averageConfidence: number
+    decisionsLast24h?: number
+  }
+}
+
+export interface AgentListResponse {
+  agents: AgentMetadata[]
+  total: number
+}
+
+export interface AnonymizedDecision {
+  decisionType: string
+  summary: string
+  confidence: number
+  confidenceLevel: string
+  processingTimeMs: number
+  timestamp: string
+}
+
+export interface AgentDetailResponse {
+  agent: AgentMetadata
+  recentDecisions: AnonymizedDecision[]
+  totalDecisions: number
+}
+
 // -----------------------------------------------------------------------------
 // API Client Class
 // -----------------------------------------------------------------------------
@@ -423,6 +471,31 @@ class ApiClient {
     }
     return this.request<InteractionDetail>('GET', `/api/history/interactions/${interactionId}`)
   }
+
+  /**
+   * Fetch all agents.
+   */
+  async fetchAgents(): Promise<ApiResult<AgentListResponse>> {
+    return this.request<AgentListResponse>('GET', '/api/agents')
+  }
+
+  /**
+   * Fetch single agent details with recent decisions.
+   */
+  async fetchAgentDetail(agentId: string): Promise<ApiResult<AgentDetailResponse>> {
+    if (!agentId) {
+      return {
+        data: null,
+        error: {
+          code: 'INVALID_PARAMS',
+          message: 'Agent ID is required',
+          status: 400,
+        },
+        success: false,
+      }
+    }
+    return this.request<AgentDetailResponse>('GET', `/api/agents/${agentId}`)
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -457,6 +530,10 @@ export const fetchInteractions = (params?: { page?: number; pageSize?: number; s
 
 export const fetchInteractionDetail = (interactionId: string) =>
   apiClient.fetchInteractionDetail(interactionId)
+
+export const fetchAgents = () => apiClient.fetchAgents()
+
+export const fetchAgentDetail = (agentId: string) => apiClient.fetchAgentDetail(agentId)
 
 export { apiClient }
 export default apiClient
