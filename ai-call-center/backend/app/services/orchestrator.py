@@ -232,10 +232,11 @@ class CallOrchestrator:
             
             provider = runtime_config.get_provider()
             
-            # Ollama doesn't need an API key
+            # Ollama doesn't need an API key but may have a custom URL
             if provider == LLMProvider.OLLAMA:
                 from app.integrations.ollama_client import OllamaClient, OllamaConfig
-                return OllamaClient(OllamaConfig())
+                ollama_url = runtime_config.get_ollama_url()
+                return OllamaClient(OllamaConfig(base_url=ollama_url))
             
             if runtime_config.is_configured():
                 api_key = runtime_config.get_api_key()

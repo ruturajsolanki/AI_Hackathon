@@ -12,6 +12,7 @@ Prerequisites:
 
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Type
 from uuid import uuid4
@@ -31,14 +32,18 @@ from app.core.llm import (
 
 logger = logging.getLogger(__name__)
 
-# Default Ollama base URL (local)
-OLLAMA_BASE_URL = "http://localhost:11434"
+# Default Ollama base URL (local) - can be overridden via environment variable
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
 
 class OllamaConfig(BaseModel):
     """Configuration for Ollama client."""
     
-    # Base URL for Ollama API
+    # Base URL for Ollama API - can be remote!
+    # Examples:
+    #   - http://localhost:11434 (local)
+    #   - http://192.168.1.100:11434 (LAN)
+    #   - http://my-ollama-server.com:11434 (remote)
     base_url: str = OLLAMA_BASE_URL
     
     # Default model to use
@@ -46,10 +51,19 @@ class OllamaConfig(BaseModel):
     default_model: str = "llama3.2"
     
     # Timeout for requests in seconds
-    timeout_seconds: float = 120.0  # Local models can be slow on first load
+    timeout_seconds: float = 120.0  # Remote/slow models may need more time
     
     # Max retries
     max_retries: int = 2
+    
+    @classmethod
+    def from_env(cls) -> "OllamaConfig":
+        """Load configuration from environment variables."""
+        return cls(
+            base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+            default_model=os.getenv("OLLAMA_MODEL", "llama3.2"),
+            timeout_seconds=float(os.getenv("OLLAMA_TIMEOUT", "120")),
+        )
 
 
 class OllamaClient(LLMClient):

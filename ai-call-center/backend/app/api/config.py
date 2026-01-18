@@ -57,6 +57,7 @@ class RuntimeConfig:
             cls._instance = super().__new__(cls)
             cls._instance._api_key: Optional[str] = None
             cls._instance._provider: LLMProvider = LLMProvider.OPENAI
+            cls._instance._ollama_url: str = "http://localhost:11434"  # Ollama server URL
             cls._instance._key_configured_at: Optional[datetime] = None
             cls._instance._last_validation: Optional[datetime] = None
             cls._instance._is_valid: Optional[bool] = None
@@ -64,19 +65,29 @@ class RuntimeConfig:
     
     def set_api_key(self, key: str, provider: LLMProvider = LLMProvider.OPENAI) -> None:
         """
-        Set the LLM API key.
+        Set the LLM API key (or Ollama URL for local provider).
         
         The key is stored in-memory only.
         A hash is logged for audit purposes (never the actual key).
         """
-        self._api_key = key
         self._provider = provider
         self._key_configured_at = datetime.now(timezone.utc)
         self._is_valid = None  # Reset validation status
         
-        # Log key configuration (hash only, never the key)
-        key_hash = hashlib.sha256(key.encode()).hexdigest()[:8]
-        logger.info(f"LLM API key configured for {provider.value} (hash prefix: {key_hash}...)")
+        # For Ollama, the "key" is actually the server URL
+        if provider == LLMProvider.OLLAMA:
+            self._ollama_url = key if key.startswith("http") else "http://localhost:11434"
+            self._api_key = "ollama-local"  # Placeholder
+            logger.info(f"Ollama configured with URL: {self._ollama_url}")
+        else:
+            self._api_key = key
+            # Log key configuration (hash only, never the key)
+            key_hash = hashlib.sha256(key.encode()).hexdigest()[:8]
+            logger.info(f"LLM API key configured for {provider.value} (hash prefix: {key_hash}...)")
+    
+    def get_ollama_url(self) -> str:
+        """Get the Ollama server URL."""
+        return self._ollama_url
     
     def get_api_key(self) -> Optional[str]:
         """Get the LLM API key if configured."""
@@ -578,10 +589,13 @@ async def _list_openai_models(api_key: str) -> ModelsListResponse:
 
 
 async def _list_ollama_models() -> ModelsListResponse:
-    """Fetch available models from local Ollama installation."""
+    """Fetch available models from Ollama installation (local or remote)."""
     import httpx
     
-    url = "http://localhost:11434/api/tags"
+    # Get configured Ollama URL
+    config = get_runtime_config()
+    base_url = config.get_ollama_url()
+    url = f"{base_url}/api/tags"
     
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:

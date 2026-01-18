@@ -294,26 +294,49 @@ export function SettingsPage() {
                 </div>
               </div>
             ) : (
-              <div className={styles.settingRow}>
-                <div className={styles.settingInfo}>
-                  <label className={styles.settingLabel}>Local Ollama Setup</label>
-                  <span className={styles.settingHint}>
-                    No API key needed! Runs locally on your machine.
-                  </span>
+              <>
+                <div className={styles.settingRow}>
+                  <div className={styles.settingInfo}>
+                    <label className={styles.settingLabel}>Ollama Server URL</label>
+                    <span className={styles.settingHint}>
+                      Local or remote Ollama server address
+                    </span>
+                  </div>
+                  <div className={styles.apiKeyInputGroup}>
+                    <input
+                      type="text"
+                      className={`${styles.input} ${styles.apiKeyInput}`}
+                      placeholder="http://localhost:11434"
+                      value={apiKeyInput || 'http://localhost:11434'}
+                      onChange={(e) => {
+                        setApiKeyInput(e.target.value)
+                        setKeyError(null)
+                      }}
+                      disabled={isSettingKey}
+                    />
+                    <button
+                      className={styles.setKeyButton}
+                      onClick={handleSetApiKey}
+                      disabled={isSettingKey}
+                    >
+                      {isSettingKey ? 'Connecting...' : 'Connect'}
+                    </button>
+                  </div>
                 </div>
-                <div className={styles.ollamaInfo}>
-                  <p>1. Install: <a href="https://ollama.ai" target="_blank" rel="noopener noreferrer">ollama.ai</a></p>
-                  <p>2. Run: <code>ollama pull llama3.2</code></p>
-                  <p>3. Start: <code>ollama serve</code></p>
-                  <button
-                    className={styles.setKeyButton}
-                    onClick={handleSetApiKey}
-                    disabled={isSettingKey}
-                  >
-                    {isSettingKey ? 'Connecting...' : 'Connect to Ollama'}
-                  </button>
+                <div className={styles.settingRow}>
+                  <div className={styles.settingInfo}>
+                    <label className={styles.settingLabel}>Setup Instructions</label>
+                    <span className={styles.settingHint}>
+                      Run Ollama on any machine
+                    </span>
+                  </div>
+                  <div className={styles.ollamaInfo}>
+                    <p><strong>Local:</strong> <code>ollama serve</code></p>
+                    <p><strong>Remote:</strong> <code>OLLAMA_HOST=0.0.0.0:11434 ollama serve</code></p>
+                    <p><strong>Models:</strong> <code>ollama pull llama3.2</code></p>
+                  </div>
                 </div>
-              </div>
+              </>
             )}
 
             {keyError && (

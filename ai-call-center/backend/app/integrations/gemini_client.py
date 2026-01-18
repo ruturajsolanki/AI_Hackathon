@@ -7,12 +7,15 @@ Uses REST API directly for Python 3.9 compatibility.
 
 import asyncio
 import json
+import logging
 import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, TypeVar
 
 import httpx
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 from app.core.llm import (
     CompletionRequest,
@@ -364,14 +367,22 @@ class GeminiClient(LLMClient):
         """Parse Gemini response into CompletionResponse."""
         # Extract content
         content = ""
+        finish_reason = "UNKNOWN"
         try:
             candidates = response.get("candidates", [])
             if candidates:
+                finish_reason = candidates[0].get("finishReason", "UNKNOWN")
                 parts = candidates[0].get("content", {}).get("parts", [])
                 if parts:
                     content = parts[0].get("text", "")
-        except Exception:
-            pass
+                
+                # Log if response was truncated
+                if finish_reason == "MAX_TOKENS":
+                    logger.warning(f"Gemini response truncated due to MAX_TOKENS (content length: {len(content)})")
+                elif finish_reason not in ("STOP", "UNKNOWN"):
+                    logger.warning(f"Gemini response finish reason: {finish_reason}")
+        except Exception as e:
+            logger.error(f"Error parsing Gemini response: {e}")
         
         # Extract usage metadata
         usage_metadata = response.get("usageMetadata", {})
