@@ -6,7 +6,89 @@
 
 ## Quick Start (Default - SQLite, No Auth)
 
-If you just want to run the app locally without MongoDB:
+If you just want to run the app locally without any database:
+
+---
+
+## 🚀 Supabase Setup (Recommended)
+
+Supabase provides free PostgreSQL database + built-in authentication.
+
+### Step 1: Create Supabase Project
+
+1. Go to **https://supabase.com** and sign up (free)
+2. Click **"New Project"**
+3. Fill in:
+   - **Name:** `ai-call-center`
+   - **Database Password:** (create a strong password, save it!)
+   - **Region:** Choose closest to you
+4. Click **Create Project** (takes ~2 minutes)
+
+### Step 2: Get Your API Keys
+
+Once the project is created:
+
+1. Go to **Settings → API** (in left sidebar)
+2. Copy these values:
+   - **Project URL:** `https://xxxxx.supabase.co`
+   - **anon/public key:** `eyJhbGciOiJIUzI1...` (safe for frontend)
+   - **service_role key:** `eyJhbGciOiJIUzI1...` (keep secret!)
+
+### Step 3: Create Database Tables
+
+1. Go to **SQL Editor** (in left sidebar)
+2. Click **"New Query"**
+3. Copy the contents of `backend/supabase_schema.sql`
+4. Paste and click **"Run"**
+5. You should see "Success. No rows returned" for each statement
+
+### Step 4: Configure Backend
+
+Create a `.env` file in `ai-call-center/backend/`:
+
+```bash
+cd ai-call-center/backend
+cat > .env << 'EOF'
+# Supabase Configuration
+SUPABASE_URL=https://xxxxx.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+# OpenAI (optional - can set via UI)
+OPENAI_API_KEY=sk-your-key-here
+
+# App
+DEBUG=true
+EOF
+```
+
+### Step 5: Install Dependencies & Run
+
+```bash
+cd ai-call-center/backend
+pip3 install -r requirements.txt
+python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### Step 6: Verify Connection
+
+```bash
+curl http://localhost:8000/health
+```
+
+You should see:
+```json
+{
+  "status": "healthy",
+  "database": "supabase"
+}
+```
+
+---
+
+## Full Setup with MongoDB (Alternative)
+
+If you prefer MongoDB over Supabase:
 
 ```bash
 # Backend

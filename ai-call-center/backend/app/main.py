@@ -26,24 +26,49 @@ async def lifespan(app: FastAPI):
     """
     # Startup
     app.state.started_at = datetime.now(timezone.utc)
+    app.state.database = "sqlite"  # Default fallback
     
-    # Try to connect to MongoDB (optional, falls back gracefully)
+    # Try to connect to Supabase first (preferred)
     try:
-        from app.persistence.mongodb import get_mongodb_store
-        mongodb = get_mongodb_store()
-        connected = await mongodb.connect()
-        app.state.mongodb_connected = connected
-        if connected:
-            logger.info("MongoDB connected successfully")
+        from app.persistence.supabase_store import get_supabase_store
+        supabase = get_supabase_store()
+        if supabase.connect():
+            app.state.database = "supabase"
+            app.state.supabase_connected = True
+            logger.info("Supabase connected successfully")
         else:
-            logger.warning("MongoDB not available, using SQLite fallback")
+            app.state.supabase_connected = False
+            logger.info("Supabase not configured, trying MongoDB...")
     except Exception as e:
-        logger.warning(f"MongoDB initialization failed: {e}, using SQLite fallback")
-        app.state.mongodb_connected = False
+        logger.warning(f"Supabase initialization failed: {e}")
+        app.state.supabase_connected = False
+    
+    # Try MongoDB if Supabase not available
+    if not getattr(app.state, 'supabase_connected', False):
+        try:
+            from app.persistence.mongodb import get_mongodb_store
+            mongodb = get_mongodb_store()
+            connected = await mongodb.connect()
+            app.state.mongodb_connected = connected
+            if connected:
+                app.state.database = "mongodb"
+                logger.info("MongoDB connected successfully")
+            else:
+                logger.warning("MongoDB not available, using SQLite fallback")
+        except Exception as e:
+            logger.warning(f"MongoDB initialization failed: {e}, using SQLite fallback")
+            app.state.mongodb_connected = False
     
     yield
     
     # Shutdown
+    try:
+        from app.persistence.supabase_store import get_supabase_store
+        supabase = get_supabase_store()
+        supabase.disconnect()
+    except Exception:
+        pass
+    
     try:
         from app.persistence.mongodb import get_mongodb_store
         mongodb = get_mongodb_store()
@@ -90,13 +115,13 @@ async def health_check():
     Health check endpoint.
     Returns service status for load balancers and monitoring.
     """
-    mongodb_status = getattr(app.state, 'mongodb_connected', False)
+    database = getattr(app.state, 'database', 'sqlite')
     
     return {
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "version": settings.APP_VERSION,
-        "database": "mongodb" if mongodb_status else "sqlite",
+        "database": database,
     }
 
 
