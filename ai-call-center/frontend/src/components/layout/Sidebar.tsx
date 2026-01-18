@@ -15,7 +15,7 @@ const navItems = [
   { to: '/demo', icon: MessageSquare, label: 'Live Demo', description: 'Interactive call simulation' },
   { to: '/interactions', icon: Headphones, label: 'Interactions', description: 'View call history' },
   { to: '/agents', icon: Users, label: 'Agents', description: 'View AI agents' },
-  { to: '/analytics', icon: BarChart3, label: 'Analytics', disabled: true, description: 'Coming soon' },
+  { to: '/analytics', icon: BarChart3, label: 'Analytics', description: 'View detailed analytics' },
   { to: '/settings', icon: Settings, label: 'Settings', disabled: true, description: 'Coming soon' },
 ]
 

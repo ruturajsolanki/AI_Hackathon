@@ -207,6 +207,68 @@ export interface AgentDetailResponse {
   totalDecisions: number
 }
 
+// Analytics Types
+export interface AnalyticsSummary {
+  totalInteractions: number
+  activeInteractions: number
+  completedInteractions: number
+  escalatedInteractions: number
+  resolutionRate: number
+  escalationRate: number
+  averageConfidence: number
+  averageDurationSeconds: number
+  averageMessagesPerCall: number
+}
+
+export interface CallsPerHourItem {
+  hour: number
+  count: number
+}
+
+export interface ChannelBreakdown {
+  channel: string
+  count: number
+  percentage: number
+}
+
+export interface StatusBreakdown {
+  status: string
+  count: number
+  percentage: number
+}
+
+export interface AgentPerformanceItem {
+  agentType: string
+  totalDecisions: number
+  averageConfidence: number
+  averageProcessingMs: number
+}
+
+export interface AnalyticsOverviewResponse {
+  summary: AnalyticsSummary
+  callsPerHour: CallsPerHourItem[]
+  channelBreakdown: ChannelBreakdown[]
+  statusBreakdown: StatusBreakdown[]
+  agentPerformance: AgentPerformanceItem[]
+  periodStart: string
+  periodEnd: string
+}
+
+export interface DailyTrendItem {
+  date: string
+  total: number
+  resolved: number
+  escalated: number
+  averageConfidence: number
+}
+
+export interface AnalyticsTrendsResponse {
+  daily: DailyTrendItem[]
+  periodStart: string
+  periodEnd: string
+  totalDays: number
+}
+
 // -----------------------------------------------------------------------------
 // API Client Class
 // -----------------------------------------------------------------------------
@@ -496,6 +558,20 @@ class ApiClient {
     }
     return this.request<AgentDetailResponse>('GET', `/api/agents/${agentId}`)
   }
+
+  /**
+   * Fetch analytics overview.
+   */
+  async fetchAnalyticsOverview(days: number = 7): Promise<ApiResult<AnalyticsOverviewResponse>> {
+    return this.request<AnalyticsOverviewResponse>('GET', `/api/analytics/overview?days=${days}`)
+  }
+
+  /**
+   * Fetch analytics trends.
+   */
+  async fetchAnalyticsTrends(days: number = 7): Promise<ApiResult<AnalyticsTrendsResponse>> {
+    return this.request<AnalyticsTrendsResponse>('GET', `/api/analytics/trends?days=${days}`)
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -534,6 +610,10 @@ export const fetchInteractionDetail = (interactionId: string) =>
 export const fetchAgents = () => apiClient.fetchAgents()
 
 export const fetchAgentDetail = (agentId: string) => apiClient.fetchAgentDetail(agentId)
+
+export const fetchAnalyticsOverview = (days?: number) => apiClient.fetchAnalyticsOverview(days)
+
+export const fetchAnalyticsTrends = (days?: number) => apiClient.fetchAnalyticsTrends(days)
 
 export { apiClient }
 export default apiClient
