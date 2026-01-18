@@ -22,11 +22,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Set environment variables
-ENV PORT=8000
 ENV PYTHONUNBUFFERED=1
 
 # Expose port
 EXPOSE 8000
 
-# Start command using shell form to expand $PORT
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Create start script that handles PORT variable
+RUN echo '#!/bin/sh\nuvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}' > /start.sh && chmod +x /start.sh
+
+# Start using the shell script
+CMD ["/start.sh"]
