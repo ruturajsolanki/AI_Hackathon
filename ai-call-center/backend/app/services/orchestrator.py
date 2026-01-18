@@ -893,6 +893,11 @@ class CallOrchestrator:
                 if state.interaction and hasattr(state.interaction, 'customer_id'):
                     customer_id = state.interaction.customer_id
                 
+                # Get last customer message from context if available
+                last_message = None
+                if primary_output.context_updates and "last_message" in primary_output.context_updates:
+                    last_message = primary_output.context_updates.get("last_message")
+                
                 create_ticket_from_escalation(
                     interaction_id=state.interaction_id,
                     escalation_reason=escalation_decision.escalation_reason.value if escalation_decision else "low_confidence",
@@ -902,7 +907,7 @@ class CallOrchestrator:
                     detected_intent=primary_output.detected_intent.value if primary_output.detected_intent else None,
                     detected_emotion=primary_output.detected_emotion.value if primary_output.detected_emotion else None,
                     ai_attempts=state.turn_count,
-                    last_customer_message=input_text,
+                    last_customer_message=last_message,
                 )
                 logger.info(f"Ticket created for escalated interaction {state.interaction_id}")
             except Exception as e:
