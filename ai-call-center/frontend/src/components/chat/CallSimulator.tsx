@@ -215,8 +215,8 @@ export function CallSimulator() {
   // Speak AI response using TTS
   const speakResponse = useCallback(async (text: string) => {
     if (!ttsEnabled || !isTTSSupported()) {
-      // If TTS is disabled, still restart listening in continuous mode
-      if (continuousVoiceMode && isCallActive) {
+      // If TTS is disabled, still restart listening in continuous mode (but not if escalated)
+      if (continuousVoiceMode && isCallActive && !isEscalated) {
         setTimeout(() => {
           clearTranscript()
           startListening()
@@ -248,15 +248,15 @@ export function CallSimulator() {
         },
       })
     } catch {
-      // TTS failed, still restart listening in continuous mode
-      if (continuousVoiceMode && isCallActive) {
+      // TTS failed, still restart listening in continuous mode (but not if escalated)
+      if (continuousVoiceMode && isCallActive && !isEscalated) {
         setTimeout(() => {
           clearTranscript()
           startListening()
         }, 500)
       }
     }
-  }, [ttsEnabled, continuousVoiceMode, isCallActive, clearTranscript, startListening])
+  }, [ttsEnabled, continuousVoiceMode, isCallActive, isEscalated, clearTranscript, startListening])
 
   // ---------------------------------------------------------------------------
   // Voice Handlers
@@ -423,8 +423,8 @@ export function CallSimulator() {
         // Speak the response (speakResponse handles auto-restart of listening)
         await speakResponse(data.responseContent)
       } else {
-        // No response content, restart listening manually
-        if (continuousVoiceMode && isCallActive) {
+        // No response content, restart listening manually (but not if escalated)
+        if (continuousVoiceMode && isCallActive && !isEscalated) {
           setTimeout(() => {
             clearTranscript()
             startListening()
