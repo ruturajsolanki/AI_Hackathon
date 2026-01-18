@@ -8,8 +8,10 @@ Integrates with:
 - ContextStore for conversation history
 - MetricsEngine for analytics signals
 - PersistentStore for durable storage
+- AuditLogger for compliance auditing
 """
 
+import logging
 from datetime import datetime, timezone
 from enum import Enum
 from typing import List, Optional
@@ -21,6 +23,7 @@ from app.agents.base import AgentInput, AgentOutput
 from app.agents.escalation import EscalationAgent, EscalationDecision, EscalationType
 from app.agents.primary import PrimaryAgent
 from app.agents.supervisor import SupervisorAgent, SupervisorReview
+from app.analytics.audit import AuditLogger, DecisionOutcome
 from app.analytics.metrics import MetricsEngine, ResolutionType
 from app.core.models import (
     AgentType,
@@ -40,6 +43,8 @@ from app.memory.context_store import (
     ShortTermContext,
 )
 from app.persistence import PersistentStore, get_store
+
+logger = logging.getLogger(__name__)
 
 
 # -----------------------------------------------------------------------------
@@ -182,6 +187,7 @@ class CallOrchestrator:
         context_store: Optional[ContextStore] = None,
         metrics_engine: Optional[MetricsEngine] = None,
         persistent_store: Optional[PersistentStore] = None,
+        audit_logger: Optional[AuditLogger] = None,
     ):
         """
         Initialize the orchestrator with agents, stores, and metrics.
@@ -193,14 +199,55 @@ class CallOrchestrator:
             context_store: Context memory store (created if not provided).
             metrics_engine: Analytics engine (created if not provided).
             persistent_store: Persistent storage (uses singleton if not provided).
+            audit_logger: Audit logger for compliance (created if not provided).
         """
-        self._primary_agent = primary_agent or PrimaryAgent()
-        self._supervisor_agent = supervisor_agent or SupervisorAgent()
+        # Create agents with LLM client if API key is available
+        llm_client = self._create_llm_client()
+        
+        self._primary_agent = primary_agent or PrimaryAgent(llm_client=llm_client)
+        self._supervisor_agent = supervisor_agent or SupervisorAgent(llm_client=llm_client)
         self._escalation_agent = escalation_agent or EscalationAgent()
         self._context_store = context_store or ContextStore()
         self._metrics_engine = metrics_engine or MetricsEngine()
         self._persistent_store = persistent_store or get_store()
+        self._audit_logger = audit_logger or AuditLogger()
         self._active_states: dict[UUID, InteractionState] = {}
+    
+    def _create_llm_client(self):
+        """
+        Create an LLM client using runtime config or environment variables.
+        
+        Priority:
+        1. Runtime-configured API key (from /api/config/llm)
+        2. Environment variable (OPENAI_API_KEY)
+        3. None (agents will use fallback logic)
+        
+        Returns:
+            OpenAIClient if configured, None otherwise.
+        """
+        try:
+            # Try runtime config first
+            from app.api.config import get_runtime_config
+            runtime_config = get_runtime_config()
+            
+            if runtime_config.is_configured():
+                from app.integrations.openai_client import OpenAIClient, OpenAIConfig
+                config = OpenAIConfig(api_key=runtime_config.get_openai_key())
+                return OpenAIClient(config)
+            
+            # Fall back to environment variable
+            from app.integrations.openai_client import OpenAIClient, OpenAIConfig
+            env_config = OpenAIConfig.from_env()
+            
+            if env_config.api_key:
+                return OpenAIClient(env_config)
+            
+            # No API key available - agents will use fallback logic
+            return None
+            
+        except Exception:
+            # If anything fails, return None - agents will use fallback
+            return None
 
     @property
     def context_store(self) -> ContextStore:
@@ -216,6 +263,11 @@ class CallOrchestrator:
     def persistent_store(self) -> PersistentStore:
         """Access the persistent store."""
         return self._persistent_store
+
+    @property
+    def audit_logger(self) -> AuditLogger:
+        """Access the audit logger."""
+        return self._audit_logger
 
     async def create_interaction(
         self,
@@ -250,6 +302,14 @@ class CallOrchestrator:
         
         # Persist interaction start
         self._persist_interaction_start(interaction)
+        
+        # Log to audit trail
+        await self._audit_logger.log_interaction_start(
+            interaction_id=interaction.interaction_id,
+            customer_id=interaction.customer_id,
+            channel=interaction.channel.value if interaction.channel else None,
+            metadata={"source": "orchestrator"},
+        )
         
         # Create orchestration state
         state = InteractionState(

@@ -572,6 +572,67 @@ class ApiClient {
   async fetchAnalyticsTrends(days: number = 7): Promise<ApiResult<AnalyticsTrendsResponse>> {
     return this.request<AnalyticsTrendsResponse>('GET', `/api/analytics/trends?days=${days}`)
   }
+
+  // ===========================================================================
+  // Configuration APIs
+  // ===========================================================================
+
+  /**
+   * Set the LLM API key.
+   * The key is stored in-memory on the server and never returned.
+   */
+  async setLlmApiKey(apiKey: string, provider: string = 'openai'): Promise<ApiResult<SetApiKeyResponse>> {
+    return this.request<SetApiKeyResponse>('POST', '/api/config/llm', {
+      api_key: apiKey,
+      provider,
+    })
+  }
+
+  /**
+   * Get the LLM configuration status.
+   */
+  async getLlmStatus(): Promise<ApiResult<LlmStatusResponse>> {
+    return this.request<LlmStatusResponse>('GET', '/api/config/llm/status')
+  }
+
+  /**
+   * Validate the configured LLM API key.
+   */
+  async validateLlmKey(): Promise<ApiResult<LlmValidationResponse>> {
+    return this.request<LlmValidationResponse>('POST', '/api/config/llm/validate')
+  }
+
+  /**
+   * Clear the configured LLM API key.
+   */
+  async clearLlmKey(): Promise<ApiResult<void>> {
+    return this.request<void>('DELETE', '/api/config/llm')
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Configuration Types
+// -----------------------------------------------------------------------------
+
+export interface SetApiKeyResponse {
+  success: boolean
+  message: string
+  configuredAt: string
+}
+
+export interface LlmStatusResponse {
+  configured: boolean
+  provider: string
+  configuredAt: string | null
+  validated: boolean | null
+  lastValidatedAt: string | null
+  message: string
+}
+
+export interface LlmValidationResponse {
+  valid: boolean
+  message: string
+  testedAt: string
 }
 
 // -----------------------------------------------------------------------------
@@ -614,6 +675,16 @@ export const fetchAgentDetail = (agentId: string) => apiClient.fetchAgentDetail(
 export const fetchAnalyticsOverview = (days?: number) => apiClient.fetchAnalyticsOverview(days)
 
 export const fetchAnalyticsTrends = (days?: number) => apiClient.fetchAnalyticsTrends(days)
+
+// Configuration exports
+export const setLlmApiKey = (apiKey: string, provider?: string) => 
+  apiClient.setLlmApiKey(apiKey, provider)
+
+export const getLlmStatus = () => apiClient.getLlmStatus()
+
+export const validateLlmKey = () => apiClient.validateLlmKey()
+
+export const clearLlmKey = () => apiClient.clearLlmKey()
 
 export { apiClient }
 export default apiClient

@@ -2,10 +2,11 @@
  * Settings Page
  * 
  * Configuration interface for the AI Call Center.
- * Demonstrates configurable options without backend mutation.
+ * Includes secure API key management for LLM providers.
  */
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { setLlmApiKey, getLlmStatus, validateLlmKey, clearLlmKey } from '../../services/apiClient'
 import styles from './SettingsPage.module.css'
 
 interface SettingsState {
@@ -28,6 +29,14 @@ interface SettingsState {
   language: string
 }
 
+interface LlmStatus {
+  configured: boolean
+  provider: string
+  validated: boolean | null
+  message: string
+  configuredAt: string | null
+}
+
 export function SettingsPage() {
   const [settings, setSettings] = useState<SettingsState>({
     appName: 'AI Call Center',
@@ -47,6 +56,93 @@ export function SettingsPage() {
 
   const [hasChanges, setHasChanges] = useState(false)
 
+  // LLM Configuration State
+  const [llmStatus, setLlmStatus] = useState<LlmStatus>({
+    configured: false,
+    provider: 'openai',
+    validated: null,
+    message: 'Loading...',
+    configuredAt: null,
+  })
+  const [apiKeyInput, setApiKeyInput] = useState('')
+  const [isSettingKey, setIsSettingKey] = useState(false)
+  const [isValidating, setIsValidating] = useState(false)
+  const [keyError, setKeyError] = useState<string | null>(null)
+
+  // Fetch LLM status on mount
+  const fetchLlmStatus = useCallback(async () => {
+    const result = await getLlmStatus()
+    if (result.success && result.data) {
+      setLlmStatus({
+        configured: result.data.configured,
+        provider: result.data.provider,
+        validated: result.data.validated,
+        message: result.data.message,
+        configuredAt: result.data.configuredAt,
+      })
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchLlmStatus()
+  }, [fetchLlmStatus])
+
+  const handleSetApiKey = async () => {
+    if (!apiKeyInput.trim()) {
+      setKeyError('Please enter an API key')
+      return
+    }
+    if (apiKeyInput.length < 10) {
+      setKeyError('API key is too short')
+      return
+    }
+
+    setIsSettingKey(true)
+    setKeyError(null)
+
+    const result = await setLlmApiKey(apiKeyInput.trim())
+    
+    if (result.success) {
+      setApiKeyInput('')
+      await fetchLlmStatus()
+      // Auto-validate after setting
+      handleValidateKey()
+    } else {
+      setKeyError(result.error?.message || 'Failed to set API key')
+    }
+
+    setIsSettingKey(false)
+  }
+
+  const handleValidateKey = async () => {
+    setIsValidating(true)
+    setKeyError(null)
+
+    const result = await validateLlmKey()
+    
+    if (result.success && result.data) {
+      if (!result.data.valid) {
+        setKeyError(result.data.message)
+      }
+    } else {
+      setKeyError(result.error?.message || 'Validation failed')
+    }
+
+    await fetchLlmStatus()
+    setIsValidating(false)
+  }
+
+  const handleClearKey = async () => {
+    if (!confirm('Are you sure you want to clear the API key? AI features will use fallback logic.')) {
+      return
+    }
+
+    const result = await clearLlmKey()
+    if (result.success) {
+      await fetchLlmStatus()
+    }
+  }
+
   const handleChange = <K extends keyof SettingsState>(
     key: K,
     value: SettingsState[K]
@@ -56,9 +152,9 @@ export function SettingsPage() {
   }
 
   const handleSave = () => {
-    // Demo only - no backend mutation
+    // Demo only - no backend mutation for display settings
     setHasChanges(false)
-    alert('Settings saved! (Demo mode - changes are not persisted)')
+    alert('Settings saved! (Demo mode - display settings are not persisted)')
   }
 
   const handleReset = () => {
@@ -112,6 +208,144 @@ export function SettingsPage() {
       </header>
 
       <div className={styles.sectionsGrid}>
+        {/* AI Configuration - Most Important */}
+        <section className={`${styles.section} ${styles.aiConfigSection}`}>
+          <div className={styles.sectionHeader}>
+            <span className={styles.sectionIcon}>🤖</span>
+            <div>
+              <h2 className={styles.sectionTitle}>AI Configuration</h2>
+              <p className={styles.sectionDescription}>
+                Configure your LLM provider API key for AI-powered features
+              </p>
+            </div>
+          </div>
+
+          {/* Status Banner */}
+          <div className={`${styles.statusBanner} ${
+            llmStatus.configured && llmStatus.validated 
+              ? styles.statusSuccess 
+              : llmStatus.configured 
+                ? styles.statusWarning 
+                : styles.statusError
+          }`}>
+            <span className={styles.statusIcon}>
+              {llmStatus.configured && llmStatus.validated ? '✓' : llmStatus.configured ? '⚠' : '○'}
+            </span>
+            <span className={styles.statusMessage}>{llmStatus.message}</span>
+          </div>
+
+          <div className={styles.settingsGroup}>
+            {/* API Key Input */}
+            <div className={styles.settingRow}>
+              <div className={styles.settingInfo}>
+                <label className={styles.settingLabel}>OpenAI API Key</label>
+                <span className={styles.settingHint}>
+                  Your API key is stored securely in-memory (never persisted to disk)
+                </span>
+              </div>
+              <div className={styles.apiKeyInputGroup}>
+                <input
+                  type="password"
+                  className={`${styles.input} ${styles.apiKeyInput}`}
+                  placeholder={llmStatus.configured ? '••••••••••••••••' : 'sk-...'}
+                  value={apiKeyInput}
+                  onChange={(e) => {
+                    setApiKeyInput(e.target.value)
+                    setKeyError(null)
+                  }}
+                  disabled={isSettingKey}
+                />
+                <button
+                  className={styles.setKeyButton}
+                  onClick={handleSetApiKey}
+                  disabled={isSettingKey || !apiKeyInput.trim()}
+                >
+                  {isSettingKey ? 'Setting...' : llmStatus.configured ? 'Update' : 'Set Key'}
+                </button>
+              </div>
+            </div>
+
+            {keyError && (
+              <div className={styles.errorMessage}>
+                <span>⚠️</span> {keyError}
+              </div>
+            )}
+
+            {/* Current Status */}
+            {llmStatus.configured && (
+              <>
+                <div className={styles.settingRow}>
+                  <div className={styles.settingInfo}>
+                    <label className={styles.settingLabel}>Status</label>
+                    <span className={styles.settingHint}>
+                      Connection status to OpenAI API
+                    </span>
+                  </div>
+                  <div className={styles.statusValue}>
+                    <span className={`${styles.statusDot} ${
+                      llmStatus.validated === true 
+                        ? styles.statusDotSuccess 
+                        : llmStatus.validated === false 
+                          ? styles.statusDotError 
+                          : styles.statusDotPending
+                    }`} />
+                    <span>
+                      {llmStatus.validated === true 
+                        ? 'Connected' 
+                        : llmStatus.validated === false 
+                          ? 'Invalid' 
+                          : 'Not Validated'}
+                    </span>
+                    <button
+                      className={styles.validateButton}
+                      onClick={handleValidateKey}
+                      disabled={isValidating}
+                    >
+                      {isValidating ? 'Validating...' : 'Test Connection'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className={styles.settingRow}>
+                  <div className={styles.settingInfo}>
+                    <label className={styles.settingLabel}>Provider</label>
+                    <span className={styles.settingHint}>
+                      LLM provider in use
+                    </span>
+                  </div>
+                  <span className={styles.readOnlyValue}>
+                    {llmStatus.provider === 'openai' ? 'OpenAI (GPT-4)' : llmStatus.provider}
+                  </span>
+                </div>
+
+                <div className={styles.settingRow}>
+                  <div className={styles.settingInfo}>
+                    <label className={styles.settingLabel}>Clear Key</label>
+                    <span className={styles.settingHint}>
+                      Remove the API key (AI will use fallback logic)
+                    </span>
+                  </div>
+                  <button
+                    className={styles.dangerButton}
+                    onClick={handleClearKey}
+                  >
+                    Clear API Key
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className={styles.infoBox}>
+            <span className={styles.infoIcon}>🔒</span>
+            <p>
+              <strong>Security Note:</strong> Your API key is stored in server memory only and is never 
+              logged, persisted to disk, or returned in API responses. For production deployments, 
+              use environment variables or a secrets manager.
+            </p>
+          </div>
+        </section>
+
         {/* Application Info */}
         <section className={styles.section}>
           <div className={styles.sectionHeader}>
