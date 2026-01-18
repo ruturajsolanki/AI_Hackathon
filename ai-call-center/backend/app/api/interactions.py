@@ -174,6 +174,18 @@ class SendMessageResponse(BaseModel):
     )
     detected_intent: Optional[str] = None
     detected_emotion: Optional[str] = None
+    
+    # Source attribution for transparency
+    source_attribution: Optional[str] = Field(
+        default=None,
+        description="Source of the response (e.g., 'Based on: Billing Policy')"
+    )
+    
+    # Sentiment tracking
+    sentiment_trend: Optional[str] = Field(
+        default=None,
+        description="Emotional trajectory: 'improving', 'declining', or 'stable'"
+    )
 
 
 class EndInteractionRequest(BaseModel):
@@ -390,6 +402,39 @@ async def send_message(
                 result.primary_output.detected_emotion,
                 result.primary_output.requires_followup,
             )
+            
+            # Extract source attribution from context updates
+            context_updates = result.primary_output.context_updates or {}
+            if 'source_attribution' in context_updates:
+                response.source_attribution = f"Based on: {context_updates['source_attribution']}"
+        
+        # Get sentiment trend from orchestrator
+        try:
+            state = orchestrator.get_state(interaction_id)
+            if state and state.interaction:
+                # Simple sentiment trend based on emotion history
+                emotion_history = state.emotion_history if hasattr(state, 'emotion_history') else []
+                if len(emotion_history) >= 2:
+                    # Use simplified scoring
+                    positive_emotions = ['satisfied', 'neutral']
+                    recent = [e.value if hasattr(e, 'value') else str(e) for e in emotion_history[-3:]]
+                    
+                    first_half = recent[:len(recent)//2] if len(recent) > 1 else recent
+                    second_half = recent[len(recent)//2:] if len(recent) > 1 else recent
+                    
+                    first_positive = sum(1 for e in first_half if e in positive_emotions)
+                    second_positive = sum(1 for e in second_half if e in positive_emotions)
+                    
+                    if second_positive > first_positive:
+                        response.sentiment_trend = "improving"
+                    elif second_positive < first_positive:
+                        response.sentiment_trend = "declining"
+                    else:
+                        response.sentiment_trend = "stable"
+                else:
+                    response.sentiment_trend = "stable"
+        except Exception:
+            response.sentiment_trend = "stable"
         
         return response
         

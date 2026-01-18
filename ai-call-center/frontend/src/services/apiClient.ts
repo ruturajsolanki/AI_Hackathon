@@ -66,6 +66,12 @@ export interface SendMessageResponse {
   suggestedReplies?: string[]
   detectedIntent?: string
   detectedEmotion?: string
+  
+  // Source attribution for transparency
+  sourceAttribution?: string | null
+  
+  // Sentiment tracking
+  sentimentTrend?: 'improving' | 'declining' | 'stable' | null
 }
 
 export interface AgentDecision {

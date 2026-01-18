@@ -318,10 +318,10 @@
 | 4 | Semantic Embeddings | High | 2 hours | ✅ |
 | 5 | Intent Confirmation | Medium | 1 hour | ✅ |
 | 6 | Quick Replies | Medium | 1 hour | ✅ |
-| 7 | Source Attribution | Medium | 1 hour | 🔄 |
-| 8 | Voice Visualizer | Medium | 1 hour | ⬜ |
+| 7 | Source Attribution | Medium | 1 hour | ✅ |
+| 8 | Voice Visualizer | Medium | 1 hour | ✅ |
 | 9 | WebSocket | High | 3 hours | ⬜ |
-| 10 | Sentiment Tracking | Medium | 2 hours | ⬜ |
+| 10 | Sentiment Tracking | Medium | 2 hours | ✅ |
 | 11 | FCR Analytics | Medium | 1 hour | ⬜ |
 | 12 | Explain Decision | High | 2 hours | ⬜ |
 | 13 | Proactive Suggestions | High | 2 hours | ⬜ |
@@ -333,9 +333,9 @@
 ## Progress Tracking
 
 **Total Tasks:** 80+  
-**Completed:** 6  
-**In Progress:** 1  
-**Remaining:** 73+
+**Completed:** 9  
+**In Progress:** 0  
+**Remaining:** 71+
 
 ### Completed Features (January 18, 2026)
 
@@ -345,6 +345,9 @@
 4. ✅ **Semantic Embeddings** - Sentence-transformer integration for true semantic search
 5. ✅ **Intent Confirmation** - Clarifying questions when confidence is 40-70%
 6. ✅ **Quick Replies** - Backend generates contextual quick reply suggestions, frontend displays buttons
+7. ✅ **Source Attribution** - Shows "Based on: [Policy]" when responses come from knowledge base
+8. ✅ **Voice Visualizer** - Real-time audio waveform visualization during voice input using Web Audio API
+9. ✅ **Sentiment Tracking** - Tracks emotional arc across conversation (improving/declining/stable)
 
 ---
 

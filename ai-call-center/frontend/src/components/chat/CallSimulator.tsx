@@ -22,6 +22,7 @@ import {
 import { startCall, sendMessage, endCall } from '../../services/apiClient'
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition'
 import { speak, stop as stopSpeech, isSupported as isTTSSupported } from '../../utils/speechSynthesis'
+import { VoiceVisualizer } from './VoiceVisualizer'
 import styles from './CallSimulator.module.css'
 
 // -----------------------------------------------------------------------------
@@ -38,6 +39,7 @@ interface CallMessage {
     emotion?: string
     confidence?: number
     processingTime?: number
+    sourceAttribution?: string | null
   }
 }
 
@@ -909,6 +911,7 @@ export function CallSimulator() {
           metadata: {
             confidence: confidenceScore,
             processingTime,
+            sourceAttribution: data.sourceAttribution,
           },
         })
 
@@ -1012,6 +1015,8 @@ export function CallSimulator() {
               <span className={styles.liveDot} aria-hidden="true" />
               <span aria-label="Call is live">LIVE</span>
             </span>
+            {/* Voice Visualizer - shows audio waveform when listening */}
+            <VoiceVisualizer isListening={isListening} barCount={5} />
             <span className={styles.duration} aria-label={`Call duration: ${formatDuration(agentState.sessionDuration)}`}>
               <Clock size={14} aria-hidden="true" />
               <time>{formatDuration(agentState.sessionDuration)}</time>
@@ -1165,6 +1170,11 @@ export function CallSimulator() {
                           {message.metadata.processingTime !== undefined && (
                             <span className={styles.metaTime} title="Processing time">
                               {message.metadata.processingTime}ms
+                            </span>
+                          )}
+                          {message.metadata.sourceAttribution && (
+                            <span className={styles.metaSource} title="Information source">
+                              📚 {message.metadata.sourceAttribution}
                             </span>
                           )}
                         </div>

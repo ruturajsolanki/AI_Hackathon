@@ -495,7 +495,7 @@ class PrimaryAgent(BaseAgent):
         emotion, emotion_confidence, emotion_factors = self._detect_emotion_keywords(content)
         
         # Generate response using KNOWLEDGE BASE (not just templates)
-        response, kb_used = self._generate_knowledge_based_response(content, intent, emotion)
+        response, kb_used, source_attribution = self._generate_knowledge_based_response(content, intent, emotion)
         
         # Boost confidence if we found a KB match
         if kb_used:
@@ -513,6 +513,7 @@ class PrimaryAgent(BaseAgent):
             "emotion_factors": emotion_factors,
             "used_fallback": True,
             "kb_used": kb_used,
+            "source_attribution": source_attribution,
         }
 
     def _detect_intent_keywords(
@@ -618,12 +619,13 @@ class PrimaryAgent(BaseAgent):
         content: str,
         intent: IntentCategory,
         emotion: EmotionalState,
-    ) -> Tuple[str, bool]:
+    ) -> Tuple[str, bool, Optional[str]]:
         """
         Generate response using KNOWLEDGE BASE first, fallback templates second.
         
         Returns:
-            Tuple of (response_text, kb_was_used)
+            Tuple of (response_text, kb_was_used, source_attribution)
+            source_attribution is a human-readable string like "Based on: Refund Policy"
         """
         kb = get_knowledge_base()
         logger.info(f"[KB] Searching for: '{content}'")
@@ -646,22 +648,32 @@ class PrimaryAgent(BaseAgent):
             sol = solutions[0]
             problem = sol.get('problem', '')
             solution = sol.get('solution', '')
+            category = sol.get('category', '')
+            subcategory = sol.get('subcategory', '')
             logger.info(f"[KB] Best match: '{problem}'")
+            
+            # Build source attribution
+            source = f"{category}"
+            if subcategory:
+                source += f" - {subcategory}"
             
             # Format the solution nicely
             if solution:
                 # Make it conversational
                 response = f"I can help with that! {solution}"
-                logger.info(f"[KB] Using KB solution!")
-                return emotional_prefix + response, True
+                logger.info(f"[KB] Using KB solution! Source: {source}")
+                return emotional_prefix + response, True, source
         
         # SECOND: Try FAQs
         faqs = kb.search_faqs(content, limit=1, min_score=0.08)
         if faqs:
             faq = faqs[0]
             answer = faq.get('answer', '')
+            question = faq.get('question', '')
+            category = faq.get('category', 'FAQ')
             if answer:
-                return emotional_prefix + answer, True
+                source = f"FAQ: {question[:40]}..." if len(question) > 40 else f"FAQ: {question}"
+                return emotional_prefix + answer, True, source
         
         # THIRD: Check for product-specific issues
         products = kb.search_products(content, limit=1, min_score=0.1)
@@ -671,14 +683,15 @@ class PrimaryAgent(BaseAgent):
             troubleshooting = prod.get('troubleshooting_steps', '')
             if troubleshooting:
                 response = f"For your {name}, here's what I recommend: {troubleshooting}"
-                return emotional_prefix + response, True
+                source = f"Product Guide: {name}"
+                return emotional_prefix + response, True, source
         
         # FALLBACK: Use generic templates if no KB match
         base_response = FALLBACK_RESPONSES.get(
             intent,
             FALLBACK_RESPONSES[IntentCategory.UNKNOWN]
         )
-        return emotional_prefix + base_response, False
+        return emotional_prefix + base_response, False, None
     
     def _generate_fallback_response(
         self,
