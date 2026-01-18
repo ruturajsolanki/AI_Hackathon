@@ -47,8 +47,8 @@ class OllamaConfig(BaseModel):
     base_url: str = OLLAMA_BASE_URL
     
     # Default model to use
-    # Recommended: llama3.2 (3B, fast), mistral (7B, good quality)
-    default_model: str = "llama3.2"
+    # Uses llama3.1:8b as it's commonly available
+    default_model: str = "llama3.1:8b"
     
     # Timeout for requests in seconds
     timeout_seconds: float = 120.0  # Remote/slow models may need more time
@@ -227,7 +227,7 @@ class OllamaClient(LLMClient):
             content=None,
             model=model_name,
             provider="ollama",
-            usage=TokenUsage(),
+            usage=TokenUsage(prompt_tokens=0, completion_tokens=0, total_tokens=0),
             latency_ms=0,
             timestamp=datetime.now(timezone.utc),
             error_message=last_error,

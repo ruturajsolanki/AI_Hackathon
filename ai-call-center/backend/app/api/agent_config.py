@@ -498,10 +498,15 @@ async def test_agent_prompt(
             ollama_url = runtime_config.get_ollama_url()
             client_config = OllamaConfig(base_url=ollama_url)
             client = OllamaClient(client_config)
-            # Use appropriate Ollama model
+            # Use appropriate Ollama model - fetch from available models
             model = request.model
-            if model.startswith("gpt") or model.startswith("gemini"):
-                model = "llama3.1:8b"  # Default Ollama model
+            if model.startswith("gpt") or model.startswith("gemini") or model.startswith("llama3.2"):
+                # Try to get the first available model from Ollama
+                try:
+                    models = await client.list_models()
+                    model = models[0] if models else "llama3.1:8b"
+                except:
+                    model = "llama3.1:8b"  # Default Ollama model
         elif provider == LLMProvider.GEMINI:
             from app.integrations.gemini_client import GeminiClient, GeminiConfig
             client_config = GeminiConfig(api_key=api_key)
