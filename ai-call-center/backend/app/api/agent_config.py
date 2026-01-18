@@ -504,7 +504,12 @@ async def test_agent_prompt(
                 # Try to get the first available model from Ollama
                 try:
                     models = await client.list_models()
-                    model = models[0] if models else "llama3.1:8b"
+                    if models:
+                        # list_models returns [{"id": "name", ...}] - extract just the name
+                        first_model = models[0]
+                        model = first_model.get("id", "llama3.1:8b") if isinstance(first_model, dict) else str(first_model)
+                    else:
+                        model = "llama3.1:8b"
                 except:
                     model = "llama3.1:8b"  # Default Ollama model
         elif provider == LLMProvider.GEMINI:
