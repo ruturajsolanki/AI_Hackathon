@@ -424,34 +424,24 @@ class EscalationAgent(BaseAgent):
         
         # Satisfaction phrases that indicate the customer is happy
         satisfaction_phrases = [
-            "i'm happy",
-            "im happy",
-            "i am happy",
-            "that's great",
-            "thats great",
-            "thank you",
-            "thanks",
-            "perfect",
-            "that works",
-            "sounds good",
-            "that's helpful",
-            "thats helpful",
-            "appreciate it",
-            "that's all",
-            "thats all",
-            "no more questions",
-            "all good",
-            "great, thanks",
-            "excellent",
-            "wonderful",
-            "i'm satisfied",
-            "im satisfied",
-            "i am satisfied",
-            "that answers my question",
-            "that's what i needed",
-            "you've been helpful",
-            "issue resolved",
-            "problem solved",
+            # Basic gratitude
+            "thank you", "thanks", "thanks so much", "really appreciate",
+            "appreciate it", "you're the best", "much appreciated",
+            # Confirmation phrases
+            "perfect", "excellent", "wonderful", "great", "awesome", "amazing",
+            "fantastic", "love it", "good job", "well done",
+            # Happiness indicators
+            "i'm happy", "im happy", "i am happy", "that's great", "thats great",
+            "i'm satisfied", "im satisfied", "i am satisfied", "very helpful",
+            # Resolution confirmations
+            "that works", "sounds good", "that's helpful", "thats helpful",
+            "that answers my question", "that's what i needed", "you've been helpful",
+            "issue resolved", "problem solved", "that solves it", "that fixes it",
+            # Closing indicators
+            "that's all", "thats all", "no more questions", "all good",
+            "great, thanks", "i'm good", "im good", "all set", "good to go",
+            "nothing else", "we're done", "that covers it", "i think that's all",
+            "that's it", "no further questions", "that's exactly what i needed",
         ]
         
         for phrase in satisfaction_phrases:

@@ -104,23 +104,49 @@ INTENT_KEYWORDS: Dict[IntentCategory, List[str]] = {
 
 EMOTION_KEYWORDS: Dict[EmotionalState, List[str]] = {
     EmotionalState.FRUSTRATED: [
-        "frustrated", "annoying", "ridiculous", "again", "still", "keeps happening"
+        "frustrated", "annoying", "ridiculous", "again", "still", "keeps happening",
+        "waste of time", "not working", "doesn't work", "useless", "terrible",
+        "fed up", "sick of", "tired of", "for the third time", "repeated"
     ],
     EmotionalState.ANGRY: [
-        "angry", "furious", "outraged", "unacceptable", "demand", "immediately"
+        "angry", "furious", "outraged", "unacceptable", "demand", "immediately",
+        "lawsuit", "sue", "manager", "supervisor", "escalate", "ridiculous",
+        "disgusting", "worst", "scam", "fraud", "liar", "lying"
     ],
     EmotionalState.CONFUSED: [
-        "confused", "don't understand", "unclear", "lost", "what do you mean", "huh"
+        "confused", "don't understand", "unclear", "lost", "what do you mean", "huh",
+        "can you explain", "i'm not sure", "what does that mean", "sorry what",
+        "don't get it", "makes no sense", "which one", "how do i"
     ],
     EmotionalState.ANXIOUS: [
-        "worried", "concerned", "urgent", "asap", "emergency", "critical", "scared"
+        "worried", "concerned", "urgent", "asap", "emergency", "critical", "scared",
+        "help me", "please help", "need this now", "can't wait", "right away",
+        "time sensitive", "deadline", "desperately", "panic"
     ],
     EmotionalState.SATISFIED: [
         "thank you", "thanks", "great", "perfect", "excellent", "appreciate",
         "happy", "satisfied", "that works", "sounds good", "helpful", "wonderful",
-        "that's all", "all good", "no more questions", "resolved"
+        "that's all", "all good", "no more questions", "resolved", "awesome",
+        "amazing", "good job", "well done", "very helpful", "problem solved",
+        "that's exactly", "you've been great", "i'm happy", "i'm satisfied",
+        "no further questions", "that answers my question", "thanks so much",
+        "really appreciate", "you're the best", "fantastic", "love it"
     ],
 }
+
+# Phrases that indicate customer wants to end the call positively
+CALL_END_POSITIVE = [
+    "that's all i needed", "that's it", "nothing else", "i'm good",
+    "you've answered everything", "that covers it", "we're done",
+    "i think that's all", "no more questions", "all set", "good to go"
+]
+
+# Phrases indicating issue is not resolved
+ISSUE_NOT_RESOLVED = [
+    "still not working", "didn't help", "doesn't solve", "not what i asked",
+    "you're not understanding", "that's not right", "wrong answer",
+    "i already tried that", "already did that", "same problem"
+]
 
 FALLBACK_RESPONSES: Dict[IntentCategory, str] = {
     IntentCategory.BILLING_INQUIRY: (
@@ -489,21 +515,42 @@ class PrimaryAgent(BaseAgent):
     def _detect_emotion_keywords(
         self, content: str
     ) -> Tuple[EmotionalState, float, List[str]]:
-        """Detect emotion using keyword matching."""
+        """Detect emotion using keyword matching with improved accuracy."""
         content_lower = content.lower()
         
         best_emotion = EmotionalState.NEUTRAL
         best_score = 0.6
         best_matches: List[str] = []
         
+        # Check for positive call-ending phrases first (high confidence satisfaction)
+        for phrase in CALL_END_POSITIVE:
+            if phrase in content_lower:
+                return EmotionalState.SATISFIED, 0.92, [f"Positive closing: '{phrase}'"]
+        
+        # Check for unresolved issue indicators (indicates frustration/need for escalation)
+        unresolved_matches = [p for p in ISSUE_NOT_RESOLVED if p in content_lower]
+        if unresolved_matches:
+            return EmotionalState.FRUSTRATED, 0.85, [f"Issue unresolved: {unresolved_matches[0]}"]
+        
+        # Standard emotion keyword detection with weighted scoring
         for emotion, keywords in EMOTION_KEYWORDS.items():
             matches = [kw for kw in keywords if kw in content_lower]
             if matches:
-                score = min(0.85, 0.5 + (len(matches) * 0.15))
-                if score > best_score or emotion in [
-                    EmotionalState.ANGRY,
-                    EmotionalState.FRUSTRATED,
-                ]:
+                # Weight by number of matches and emotion severity
+                base_score = 0.55
+                match_bonus = len(matches) * 0.12
+                
+                # Boost score for clear positive signals
+                if emotion == EmotionalState.SATISFIED:
+                    # More matches = higher confidence in satisfaction
+                    score = min(0.95, base_score + match_bonus + 0.15)
+                elif emotion in [EmotionalState.ANGRY, EmotionalState.FRUSTRATED]:
+                    # Negative emotions get priority detection
+                    score = min(0.90, base_score + match_bonus + 0.10)
+                else:
+                    score = min(0.85, base_score + match_bonus)
+                
+                if score > best_score:
                     best_score = score
                     best_emotion = emotion
                     best_matches = matches
@@ -596,6 +643,18 @@ class PrimaryAgent(BaseAgent):
             emotion_confidence * 0.3 +
             context_confidence * 0.3
         ) - fallback_penalty
+        
+        # Boost confidence for satisfied customers (they're likely done)
+        detected_emotion = input_data.context.emotion_history[-1] if (
+            input_data.context and input_data.context.emotion_history
+        ) else None
+        
+        if detected_emotion == EmotionalState.SATISFIED or emotion_confidence >= 0.85:
+            overall_score = min(0.95, overall_score + 0.15)
+        
+        # Lower confidence if customer seems frustrated and issue persists
+        if detected_emotion == EmotionalState.FRUSTRATED:
+            overall_score = max(0.35, overall_score - 0.10)
         
         overall_score = max(0.0, min(1.0, overall_score))
         
