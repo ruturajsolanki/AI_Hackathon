@@ -888,12 +888,17 @@ class CallOrchestrator:
                 if escalation_decision and escalation_decision.priority <= 1:
                     priority = TicketPriority.CRITICAL
                 
+                # Get customer_id from interaction if available
+                customer_id = None
+                if state.interaction and hasattr(state.interaction, 'customer_id'):
+                    customer_id = state.interaction.customer_id
+                
                 create_ticket_from_escalation(
                     interaction_id=state.interaction_id,
                     escalation_reason=escalation_decision.escalation_reason.value if escalation_decision else "low_confidence",
                     issue_summary=primary_output.decision_summary or "Customer issue requiring human attention",
                     priority=priority,
-                    customer_id=state.customer_id,
+                    customer_id=customer_id,
                     detected_intent=primary_output.detected_intent.value if primary_output.detected_intent else None,
                     detected_emotion=primary_output.detected_emotion.value if primary_output.detected_emotion else None,
                     ai_attempts=state.turn_count,
