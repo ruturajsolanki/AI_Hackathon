@@ -78,7 +78,21 @@ export function CallSimulator() {
     sessionDuration: 0,
   })
   
-  // Speech Recognition Hook
+  // Continuous voice mode state
+  const [continuousVoiceMode, setContinuousVoiceMode] = useState(true) // Enable by default
+  
+  // Handler for auto-sending speech (defined before hook to avoid stale closure)
+  const handleAutoSpeechEnd = useCallback(async (spokenText: string) => {
+    console.log('[AutoSpeechEnd] Received text:', spokenText)
+    if (!spokenText.trim() || !isCallActive || agentState.status === 'processing') {
+      return
+    }
+    // Clear input and send
+    setInput('')
+    // We'll call the actual send function via ref to avoid circular deps
+  }, [isCallActive, agentState.status])
+  
+  // Speech Recognition Hook - with continuous mode for hands-free calls
   const {
     isListening,
     isSupported: isSTTSupported,
@@ -93,8 +107,11 @@ export function CallSimulator() {
     clearTranscript,
   } = useSpeechRecognition({
     language: 'en-US',
-    continuous: false,
+    continuous: continuousVoiceMode && isCallActive, // Continuous during active call
     interimResults: true,
+    autoRestart: continuousVoiceMode && isCallActive, // Auto-restart in call
+    autoSendDelay: continuousVoiceMode ? 1500 : 0, // 1.5 second pause = auto-send
+    onSpeechEnd: handleAutoSpeechEnd,
   })
 
   // Refs
@@ -202,11 +219,20 @@ export function CallSimulator() {
 
   // Speak AI response using TTS
   const speakResponse = useCallback(async (text: string) => {
-    if (!ttsEnabled || !isTTSSupported()) return
+    if (!ttsEnabled || !isTTSSupported()) {
+      // If TTS is disabled, still restart listening in continuous mode
+      if (continuousVoiceMode && isCallActive) {
+        setTimeout(() => {
+          clearTranscript()
+          startListening()
+        }, 500)
+      }
+      return
+    }
     
     try {
       await speak(text, {
-        rate: 1.0,
+        rate: 0.95, // Slightly slower for more natural sound
         pitch: 1.0,
         volume: 0.9,
         onStart: () => {
@@ -217,12 +243,25 @@ export function CallSimulator() {
             ...prev, 
             status: prev.shouldEscalate ? 'speaking' : 'listening' 
           }))
+          // Auto-restart listening after AI finishes speaking in continuous mode
+          if (continuousVoiceMode && isCallActive && !prev.shouldEscalate) {
+            setTimeout(() => {
+              clearTranscript()
+              startListening()
+            }, 500) // Small delay before restarting
+          }
         },
       })
     } catch {
-      // TTS failed, just continue
+      // TTS failed, still restart listening in continuous mode
+      if (continuousVoiceMode && isCallActive) {
+        setTimeout(() => {
+          clearTranscript()
+          startListening()
+        }, 500)
+      }
     }
-  }, [ttsEnabled])
+  }, [ttsEnabled, continuousVoiceMode, isCallActive, clearTranscript, startListening])
 
   // ---------------------------------------------------------------------------
   // Voice Handlers
@@ -505,7 +544,9 @@ export function CallSimulator() {
         {
           id: 'connected',
           role: 'system',
-          content: 'Call connected. AI Agent is ready. Click the microphone to speak.',
+          content: continuousVoiceMode 
+            ? 'Call connected. Hands-free mode enabled - just speak naturally!'
+            : 'Call connected. AI Agent is ready. Click the microphone to speak.',
           timestamp: new Date(),
         },
       ])

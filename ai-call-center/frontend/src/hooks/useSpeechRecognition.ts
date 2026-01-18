@@ -3,6 +3,7 @@
  * 
  * Custom React hook for browser-based speech recognition using Web Speech API.
  * Handles microphone permissions, transcription, and error states.
+ * Supports continuous listening mode for hands-free operation.
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'
@@ -22,6 +23,10 @@ export interface SpeechRecognitionOptions {
   maxAlternatives?: number
   /** Auto-restart on end (default: false) */
   autoRestart?: boolean
+  /** Auto-send after silence (milliseconds, 0 = disabled) */
+  autoSendDelay?: number
+  /** Callback when speech ends naturally (for auto-send) */
+  onSpeechEnd?: (transcript: string) => void
 }
 
 export interface SpeechRecognitionState {
@@ -54,7 +59,10 @@ export interface SpeechRecognitionControls {
   clearError: () => void
 }
 
-export type UseSpeechRecognitionReturn = SpeechRecognitionState & SpeechRecognitionControls
+export type UseSpeechRecognitionReturn = SpeechRecognitionState & SpeechRecognitionControls & {
+  /** The last captured text (persists after recognition ends) */
+  capturedText: string
+}
 
 // -----------------------------------------------------------------------------
 // Browser API Types
@@ -106,6 +114,8 @@ export function useSpeechRecognition(
     interimResults = true,
     maxAlternatives = 1,
     autoRestart = false,
+    autoSendDelay = 0,
+    onSpeechEnd,
   } = options
 
   // State
@@ -123,10 +133,26 @@ export function useSpeechRecognition(
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
   const isStoppingRef = useRef(false)
   const lastCapturedRef = useRef('')
+  const autoSendTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const currentTranscriptRef = useRef('')
+  const shouldAutoRestartRef = useRef(autoRestart)
+
+  // Update ref when option changes
+  useEffect(() => {
+    shouldAutoRestartRef.current = autoRestart
+  }, [autoRestart])
 
   // Check browser support
   const isSupported = typeof window !== 'undefined' && 
     !!(window.SpeechRecognition || window.webkitSpeechRecognition)
+
+  // Clear auto-send timer
+  const clearAutoSendTimer = useCallback(() => {
+    if (autoSendTimerRef.current) {
+      clearTimeout(autoSendTimerRef.current)
+      autoSendTimerRef.current = null
+    }
+  }, [])
 
   // Initialize recognition instance
   useEffect(() => {
@@ -146,33 +172,44 @@ export function useSpeechRecognition(
     recognition.onstart = () => {
       setIsListening(true)
       setError(null)
+      currentTranscriptRef.current = ''
     }
 
     recognition.onend = () => {
       console.log('[SpeechRecognition] Recognition ended')
       setIsListening(false)
-      // Don't clear interim transcript here - let the caller handle it
+      
+      // If we have text and auto-send is enabled, trigger callback
+      if (autoSendDelay > 0 && currentTranscriptRef.current && onSpeechEnd) {
+        clearAutoSendTimer()
+        autoSendTimerRef.current = setTimeout(() => {
+          if (currentTranscriptRef.current) {
+            onSpeechEnd(currentTranscriptRef.current)
+            currentTranscriptRef.current = ''
+          }
+        }, autoSendDelay)
+      }
       
       // Auto-restart if enabled and not manually stopped
-      if (autoRestart && !isStoppingRef.current) {
-        try {
-          recognition.start()
-        } catch {
-          // Ignore restart errors
-        }
+      if (shouldAutoRestartRef.current && !isStoppingRef.current) {
+        setTimeout(() => {
+          try {
+            recognition.start()
+          } catch {
+            // Ignore restart errors
+          }
+        }, 500) // Small delay before restart
       }
       isStoppingRef.current = false
     }
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      console.log('[SpeechRecognition] onresult event received')
       let interim = ''
       let final = ''
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i]
         const transcriptText = result[0].transcript
-        console.log('[SpeechRecognition] Result:', transcriptText, 'isFinal:', result.isFinal)
 
         if (result.isFinal) {
           final += transcriptText
@@ -180,25 +217,22 @@ export function useSpeechRecognition(
           interim += transcriptText
         }
       }
-
-      console.log('[SpeechRecognition] Setting - final:', final, 'interim:', interim)
       
       if (final) {
         setFinalTranscript(prev => prev + final)
         setTranscript(prev => prev + final)
-        // Save captured text
         lastCapturedRef.current = final
         setCapturedText(final)
-        console.log('[SpeechRecognition] 💾 Captured final text:', final)
+        currentTranscriptRef.current = final
+        console.log('[SpeechRecognition] Final:', final)
       }
       
-      // Only update interim if we have new text (don't clear with empty string)
       if (interim) {
         setInterimTranscript(interim)
-        // Also save interim as captured text
+        // Also track interim for auto-send
+        currentTranscriptRef.current = interim
         lastCapturedRef.current = interim
         setCapturedText(interim)
-        console.log('[SpeechRecognition] 💾 Captured interim text:', interim)
       }
     }
 
@@ -214,6 +248,12 @@ export function useSpeechRecognition(
 
       const errorMessage = errorMessages[event.error] || `Speech recognition error: ${event.error}`
       
+      // Don't set error for 'no-speech' in continuous mode - just restart
+      if (event.error === 'no-speech' && shouldAutoRestartRef.current) {
+        console.log('[SpeechRecognition] No speech, will restart...')
+        return
+      }
+      
       setError(errorMessage)
       setIsListening(false)
 
@@ -223,19 +263,23 @@ export function useSpeechRecognition(
     }
 
     recognition.onspeechend = () => {
-      // Don't auto-stop - let the user click the mic button to stop
-      // This gives us time to capture the final transcript
       console.log('[SpeechRecognition] Speech ended')
+      // In non-continuous mode, this triggers before onend
+      // In continuous mode, recognition keeps going
     }
 
     recognition.onnomatch = () => {
-      setError('No speech was recognized. Please try again.')
+      // Don't show error in continuous mode
+      if (!shouldAutoRestartRef.current) {
+        setError('No speech was recognized. Please try again.')
+      }
     }
 
     recognitionRef.current = recognition
 
     // Cleanup
     return () => {
+      clearAutoSendTimer()
       if (recognitionRef.current) {
         try {
           recognitionRef.current.abort()
@@ -244,7 +288,7 @@ export function useSpeechRecognition(
         }
       }
     }
-  }, [language, continuous, interimResults, maxAlternatives, autoRestart, isSupported])
+  }, [language, continuous, interimResults, maxAlternatives, isSupported, autoSendDelay, onSpeechEnd, clearAutoSendTimer])
 
   // Update language dynamically
   useEffect(() => {
@@ -270,6 +314,7 @@ export function useSpeechRecognition(
     setError(null)
     setPermissionDenied(false)
     isStoppingRef.current = false
+    clearAutoSendTimer()
 
     try {
       recognitionRef.current.start()
@@ -280,7 +325,7 @@ export function useSpeechRecognition(
         setError('Failed to start speech recognition.')
       }
     }
-  }, [isSupported, isListening])
+  }, [isSupported, isListening, clearAutoSendTimer])
 
   // Stop listening
   const stopListening = useCallback(() => {
@@ -288,6 +333,8 @@ export function useSpeechRecognition(
 
     console.log('[SpeechRecognition] stopListening called')
     isStoppingRef.current = true
+    shouldAutoRestartRef.current = false // Disable auto-restart when manually stopped
+    clearAutoSendTimer()
 
     try {
       recognitionRef.current.stop()
@@ -296,9 +343,7 @@ export function useSpeechRecognition(
     }
 
     setIsListening(false)
-    // DON'T clear transcripts here - let the caller grab them first
-    // The caller should call clearTranscript() after using the transcript
-  }, [isListening])
+  }, [isListening, clearAutoSendTimer])
 
   // Toggle listening
   const toggleListening = useCallback(() => {
@@ -314,6 +359,7 @@ export function useSpeechRecognition(
     setTranscript('')
     setInterimTranscript('')
     setFinalTranscript('')
+    currentTranscriptRef.current = ''
   }, [])
 
   // Clear error
@@ -329,7 +375,7 @@ export function useSpeechRecognition(
     transcript,
     interimTranscript,
     finalTranscript,
-    capturedText,  // The last captured text (persists after recognition ends)
+    capturedText,
     error,
     permissionDenied,
     // Controls

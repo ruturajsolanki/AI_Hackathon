@@ -38,6 +38,21 @@ interface TestResult {
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
+// Model options per provider
+const OPENAI_MODELS = [
+  { value: 'gpt-4o', label: 'GPT-4o (Most Capable)' },
+  { value: 'gpt-4o-mini', label: 'GPT-4o Mini (Fast)' },
+  { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
+  { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
+]
+
+const GEMINI_MODELS = [
+  { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash (Recommended)' },
+  { value: 'gemini-1.5-flash-latest', label: 'Gemini 1.5 Flash' },
+  { value: 'gemini-1.5-pro-latest', label: 'Gemini 1.5 Pro (Most Capable)' },
+  { value: 'gemini-pro', label: 'Gemini Pro (Legacy)' },
+]
+
 export function AgentProgrammingPage() {
   const [agents, setAgents] = useState<AgentConfig[]>([])
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null)
@@ -49,6 +64,31 @@ export function AgentProgrammingPage() {
   const [testInput, setTestInput] = useState("Hello, I have a question about my recent bill.")
   const [hasChanges, setHasChanges] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [currentProvider, setCurrentProvider] = useState<'openai' | 'gemini'>('openai')
+
+  // Fetch current LLM provider
+  useEffect(() => {
+    const fetchProvider = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/config/llm/status`)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.provider === 'gemini') {
+            setCurrentProvider('gemini')
+          } else {
+            setCurrentProvider('openai')
+          }
+        }
+      } catch {
+        // Default to OpenAI
+      }
+    }
+    fetchProvider()
+  }, [])
+
+  // Get models based on current provider
+  const availableModels = currentProvider === 'gemini' ? GEMINI_MODELS : OPENAI_MODELS
+  const defaultModel = currentProvider === 'gemini' ? 'gemini-2.0-flash' : 'gpt-4o-mini'
 
   const fetchAgents = useCallback(async () => {
     setIsLoading(true)
@@ -389,15 +429,14 @@ export function AgentProgrammingPage() {
                 <div className={styles.sectionBody}>
                   <div className={styles.formGrid}>
                     <div className={styles.formField}>
-                      <label>Model</label>
+                      <label>Model ({currentProvider === 'gemini' ? 'Google Gemini' : 'OpenAI'})</label>
                       <select
-                        value={editedConfig.model || 'gpt-4o-mini'}
+                        value={editedConfig.model || defaultModel}
                         onChange={(e) => handleConfigChange('model', e.target.value)}
                       >
-                        <option value="gpt-4o">GPT-4o (Most Capable)</option>
-                        <option value="gpt-4o-mini">GPT-4o Mini (Fast)</option>
-                        <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                        {availableModels.map(m => (
+                          <option key={m.value} value={m.value}>{m.label}</option>
+                        ))}
                       </select>
                     </div>
 
