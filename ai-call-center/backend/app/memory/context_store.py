@@ -563,3 +563,142 @@ class ContextStore:
             count = len(self._interactions)
             self._interactions.clear()
             return count
+
+    async def get_conversation_for_llm(
+        self,
+        interaction_id: UUID,
+        max_turns: int = 6,
+    ) -> str:
+        """
+        Get formatted conversation history for LLM context.
+        
+        Returns recent messages in a format suitable for including
+        in LLM prompts. This enables the AI to remember what was
+        discussed earlier in the conversation.
+        
+        Args:
+            interaction_id: Target interaction.
+            max_turns: Maximum number of recent turns to include.
+            
+        Returns:
+            Formatted string with conversation history, or empty string
+            if no history exists.
+        """
+        memory = self._interactions.get(interaction_id)
+        if not memory or len(memory.messages) == 0:
+            return ""
+        
+        async with memory._lock:
+            # Get recent messages
+            recent = list(memory.messages)[-max_turns:]
+            
+            if not recent:
+                return ""
+            
+            lines = ["=== Recent Conversation ==="]
+            
+            for msg in recent:
+                role_display = "Customer" if msg.role == MessageRole.CUSTOMER else "Agent"
+                timestamp = msg.timestamp.strftime("%H:%M:%S")
+                lines.append(f"[{timestamp}] {role_display}: {msg.content}")
+            
+            lines.append("=== End Conversation ===")
+            
+            return "\n".join(lines)
+
+    async def get_conversation_summary(
+        self,
+        interaction_id: UUID,
+    ) -> Dict[str, Any]:
+        """
+        Get a structured summary of the conversation for agent context.
+        
+        Returns:
+            Dictionary with:
+            - turn_count: Number of message exchanges
+            - topics: Key topics discussed
+            - issues: Unresolved issues
+            - sentiment_trend: Is sentiment improving/declining
+            - last_customer_message: Most recent customer input
+            - last_agent_response: Most recent agent response
+        """
+        memory = self._interactions.get(interaction_id)
+        if not memory:
+            return {
+                "turn_count": 0,
+                "topics": [],
+                "issues": [],
+                "sentiment_trend": "neutral",
+                "last_customer_message": None,
+                "last_agent_response": None,
+            }
+        
+        async with memory._lock:
+            messages = list(memory.messages)
+            
+            # Find last customer and agent messages
+            last_customer = None
+            last_agent = None
+            for msg in reversed(messages):
+                if msg.role == MessageRole.CUSTOMER and last_customer is None:
+                    last_customer = msg.content
+                elif msg.role == MessageRole.AGENT and last_agent is None:
+                    last_agent = msg.content
+                if last_customer and last_agent:
+                    break
+            
+            # Determine sentiment trend from emotion history
+            emotion_history = [
+                m.detected_emotion for m in messages 
+                if m.detected_emotion is not None
+            ]
+            sentiment_trend = self._analyze_sentiment_trend(emotion_history)
+            
+            return {
+                "turn_count": len(messages) // 2,  # Approximate exchanges
+                "topics": memory.context.key_topics if memory.context else [],
+                "issues": memory.context.unresolved_issues if memory.context else [],
+                "sentiment_trend": sentiment_trend,
+                "last_customer_message": last_customer,
+                "last_agent_response": last_agent,
+            }
+    
+    def _analyze_sentiment_trend(
+        self,
+        emotion_history: List[Optional[EmotionalState]],
+    ) -> str:
+        """
+        Analyze sentiment trend from emotion history.
+        
+        Returns 'improving', 'declining', or 'stable'.
+        """
+        if len(emotion_history) < 2:
+            return "stable"
+        
+        # Score emotions: positive = higher, negative = lower
+        emotion_scores = {
+            EmotionalState.SATISFIED: 5,
+            EmotionalState.NEUTRAL: 3,
+            EmotionalState.CONFUSED: 2,
+            EmotionalState.ANXIOUS: 2,
+            EmotionalState.FRUSTRATED: 1,
+            EmotionalState.ANGRY: 0,
+        }
+        
+        # Get scores for last few emotions
+        recent = emotion_history[-3:]
+        scores = [emotion_scores.get(e, 3) for e in recent if e is not None]
+        
+        if len(scores) < 2:
+            return "stable"
+        
+        # Compare first vs last half
+        first_avg = sum(scores[:len(scores)//2]) / max(1, len(scores)//2)
+        second_avg = sum(scores[len(scores)//2:]) / max(1, len(scores) - len(scores)//2)
+        
+        diff = second_avg - first_avg
+        if diff > 0.5:
+            return "improving"
+        elif diff < -0.5:
+            return "declining"
+        return "stable"

@@ -477,8 +477,8 @@ class CallOrchestrator:
                 interaction_id
             )
             
-            # Step 4: Prepare agent input with context
-            agent_input = self._prepare_agent_input(
+            # Step 4: Prepare agent input with context and conversation history
+            agent_input = await self._prepare_agent_input(
                 state,
                 content,
                 metadata or {},
@@ -863,14 +863,14 @@ class CallOrchestrator:
             escalation_history,
         )
 
-    def _prepare_agent_input(
+    async def _prepare_agent_input(
         self,
         state: InteractionState,
         content: str,
         metadata: dict,
         short_term_context: Optional[ShortTermContext],
     ) -> AgentInput:
-        """Prepare structured input for agents with context."""
+        """Prepare structured input for agents with context and conversation history."""
         context = None
         if short_term_context:
             context = ConversationContext(
@@ -891,10 +891,17 @@ class CallOrchestrator:
                 last_updated=datetime.now(timezone.utc),
             )
         
+        # Get formatted conversation history for LLM memory
+        conversation_history = await self._context_store.get_conversation_for_llm(
+            state.interaction_id,
+            max_turns=6,  # Include last 6 messages for context
+        )
+        
         return AgentInput(
             interaction_id=state.interaction_id,
             content=content,
             context=context,
+            conversation_history=conversation_history,
             suggested_intent=short_term_context.current_intent if short_term_context else None,
             suggested_emotion=short_term_context.current_emotion if short_term_context else None,
             metadata=metadata,

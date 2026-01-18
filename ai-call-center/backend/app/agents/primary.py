@@ -284,6 +284,19 @@ class PrimaryAgent(BaseAgent):
             used_fallback=used_fallback,
         )
         
+        # Intent confirmation loop: Ask for clarification at medium confidence
+        requires_confirmation = False
+        if 0.40 <= intent_confidence <= 0.70:
+            confirmation_response = self._generate_confirmation_question(
+                detected_intent,
+                input_data.content,
+            )
+            if confirmation_response:
+                response_content = confirmation_response
+                decision_type = DecisionType.CLARIFY
+                requires_confirmation = True
+                intent_factors.append(f"Asking confirmation for {detected_intent.value} (confidence: {intent_confidence:.0%})")
+        
         # Build reasoning chain
         reasoning = self._build_reasoning(
             detected_intent,
@@ -310,13 +323,14 @@ class PrimaryAgent(BaseAgent):
             detected_emotion=detected_emotion,
             confidence=confidence,
             reasoning=reasoning,
-            requires_followup=decision_type == DecisionType.CLARIFY,
+            requires_followup=decision_type == DecisionType.CLARIFY or requires_confirmation,
             recommended_actions=self._get_recommended_actions(decision_type, detected_intent),
             escalation_target=None,
             context_updates={
                 "last_intent": detected_intent.value if detected_intent else None,
                 "last_emotion": detected_emotion.value if detected_emotion else None,
                 "turn_processed": True,
+                "requires_confirmation": requires_confirmation,
                 "used_llm": not used_fallback,
             },
             processed_at=end_time,
@@ -334,8 +348,12 @@ class PrimaryAgent(BaseAgent):
             return self._fallback_analysis(input_data.content)
         
         try:
-            # Build prompt with knowledge base context
-            conversation_history = self._format_context_history(input_data.context)
+            # Use pre-formatted conversation history from orchestrator if available
+            # This gives the AI memory of recent exchanges
+            conversation_history = input_data.conversation_history
+            if not conversation_history:
+                # Fallback to context-based history
+                conversation_history = self._format_context_history(input_data.context)
             
             # Get knowledge base context for the customer message
             kb = get_knowledge_base()
@@ -908,3 +926,87 @@ class PrimaryAgent(BaseAgent):
             actions.append("Prepare retention offers")
         
         return actions
+
+    def _generate_confirmation_question(
+        self,
+        detected_intent: IntentCategory,
+        customer_message: str,
+    ) -> Optional[str]:
+        """
+        Generate a clarifying question when intent confidence is medium.
+        
+        This helps avoid misunderstandings by confirming intent before
+        providing a potentially wrong response.
+        
+        Returns None if no confirmation is needed or available.
+        """
+        # Skip confirmation for very clear intents
+        skip_intents = [
+            IntentCategory.GENERAL_INQUIRY,
+            IntentCategory.FEEDBACK,
+        ]
+        if detected_intent in skip_intents:
+            return None
+        
+        # Generate intent-specific confirmation questions
+        confirmation_templates = {
+            IntentCategory.BILLING_INQUIRY: (
+                "I want to make sure I understand correctly. "
+                "Are you looking for help with billing, payments, or your account balance?"
+            ),
+            IntentCategory.TECHNICAL_SUPPORT: (
+                "Just to clarify - are you experiencing a technical issue with our service? "
+                "Or is this about something else I can help with?"
+            ),
+            IntentCategory.ACCOUNT_MANAGEMENT: (
+                "It sounds like you need help with your account. "
+                "Is this about updating your profile, password, or account settings?"
+            ),
+            IntentCategory.PRODUCT_INFORMATION: (
+                "I'd be happy to help with product information. "
+                "Are you looking for details about a specific product or comparing options?"
+            ),
+            IntentCategory.COMPLAINT: (
+                "I can see you may have a concern. "
+                "Could you tell me more about what happened so I can help address this properly?"
+            ),
+            IntentCategory.ORDER_STATUS: (
+                "Are you checking on the status of an order? "
+                "If so, do you have an order number I can look up?"
+            ),
+            IntentCategory.CANCELLATION: (
+                "It sounds like you're considering cancellation. "
+                "Would you like to proceed with cancelling, or would you like to discuss your options first?"
+            ),
+            IntentCategory.UNKNOWN: (
+                "I want to make sure I help you with the right thing. "
+                "Could you tell me a bit more about what you're looking for today?"
+            ),
+        }
+        
+        return confirmation_templates.get(detected_intent)
+    
+    def _get_similar_intents(self, primary_intent: IntentCategory) -> List[IntentCategory]:
+        """
+        Get intents that are often confused with the primary intent.
+        Used for suggesting alternatives during confirmation.
+        """
+        similar_map = {
+            IntentCategory.BILLING_INQUIRY: [
+                IntentCategory.ACCOUNT_MANAGEMENT,
+                IntentCategory.ORDER_STATUS,
+            ],
+            IntentCategory.TECHNICAL_SUPPORT: [
+                IntentCategory.PRODUCT_INFORMATION,
+                IntentCategory.ACCOUNT_MANAGEMENT,
+            ],
+            IntentCategory.CANCELLATION: [
+                IntentCategory.COMPLAINT,
+                IntentCategory.BILLING_INQUIRY,
+            ],
+            IntentCategory.ORDER_STATUS: [
+                IntentCategory.CANCELLATION,
+                IntentCategory.PRODUCT_INFORMATION,
+            ],
+        }
+        return similar_map.get(primary_intent, [])

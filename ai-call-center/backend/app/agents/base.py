@@ -52,6 +52,12 @@ class AgentInput(BaseModel):
         description="Accumulated conversation context"
     )
     
+    # Conversation history for LLM context
+    conversation_history: str = Field(
+        default="",
+        description="Formatted recent conversation for LLM memory"
+    )
+    
     # Classification hints (if pre-processed)
     suggested_intent: Optional[IntentCategory] = Field(default=None)
     suggested_emotion: Optional[EmotionalState] = Field(default=None)

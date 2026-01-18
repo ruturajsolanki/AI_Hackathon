@@ -61,6 +61,11 @@ export interface SendMessageResponse {
   confidenceLevel: 'high' | 'medium' | 'low' | null
   processingTimeMs: number
   agentDecisions?: AgentDecision[]
+  
+  // Quick reply suggestions
+  suggestedReplies?: string[]
+  detectedIntent?: string
+  detectedEmotion?: string
 }
 
 export interface AgentDecision {
@@ -87,6 +92,52 @@ export interface EndCallResponse {
   wasEscalated: boolean
   resolutionStatus: 'resolved' | 'escalated' | 'abandoned'
 }
+
+// Streaming Types
+export interface StreamingEventStatus {
+  event: 'status'
+  data: {
+    phase: string
+    message: string
+  }
+}
+
+export interface StreamingEventToken {
+  event: 'token'
+  data: {
+    token: string
+    accumulated: string
+    progress: number
+  }
+}
+
+export interface StreamingEventComplete {
+  event: 'complete'
+  data: {
+    response: string
+    shouldEscalate: boolean
+    processingTimeMs: number
+    escalationType: string | null
+    escalationReason: string | null
+    confidenceLevel: string | null
+    confidenceScore: number | null
+    intent: string | null
+    emotion: string | null
+  }
+}
+
+export interface StreamingEventError {
+  event: 'error'
+  data: {
+    message: string
+  }
+}
+
+export type StreamingEvent = 
+  | StreamingEventStatus 
+  | StreamingEventToken 
+  | StreamingEventComplete 
+  | StreamingEventError
 
 export interface CallsPerHourItem {
   hour: number
@@ -425,6 +476,89 @@ class ApiClient {
         metadata: params.metadata,
       }
     )
+  }
+
+  /**
+   * Send a message and receive streaming response via SSE.
+   * 
+   * Returns an async generator that yields streaming events:
+   * - status: Processing status updates
+   * - token: Individual response tokens  
+   * - complete: Final result with metadata
+   * - error: Error information
+   */
+  async *sendMessageStream(
+    callId: string,
+    message: string,
+    params: Omit<SendMessageParams, 'content'> = {}
+  ): AsyncGenerator<StreamingEvent> {
+    if (!callId) {
+      yield {
+        event: 'error',
+        data: { message: 'Call ID is required' }
+      }
+      return
+    }
+
+    const url = `${this.baseUrl}/api/interactions/${callId}/message/stream`
+    
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: this.defaultHeaders,
+        body: JSON.stringify({
+          content: message,
+          metadata: params.metadata,
+        }),
+      })
+
+      if (!response.ok) {
+        yield {
+          event: 'error',
+          data: { message: `HTTP ${response.status}: ${response.statusText}` }
+        }
+        return
+      }
+
+      const reader = response.body?.getReader()
+      if (!reader) {
+        yield {
+          event: 'error',
+          data: { message: 'Stream not supported' }
+        }
+        return
+      }
+
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        
+        // Parse SSE events from buffer
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || '' // Keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const eventData = JSON.parse(line.slice(6))
+              yield this.transformResponse<StreamingEvent>(eventData)
+            } catch {
+              // Skip malformed JSON
+            }
+          }
+        }
+      }
+    } catch (err) {
+      yield {
+        event: 'error',
+        data: { message: err instanceof Error ? err.message : 'Stream failed' }
+      }
+    }
   }
 
   /**
@@ -915,6 +1049,9 @@ export const startCall = (params?: StartCallParams) => apiClient.startCall(param
 
 export const sendMessage = (callId: string, message: string) =>
   apiClient.sendMessage(callId, message)
+
+export const sendMessageStream = (callId: string, message: string) =>
+  apiClient.sendMessageStream(callId, message)
 
 export const endCall = (callId: string, params?: EndCallParams) =>
   apiClient.endCall(callId, params)

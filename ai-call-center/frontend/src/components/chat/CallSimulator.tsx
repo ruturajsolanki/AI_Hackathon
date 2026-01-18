@@ -82,6 +82,9 @@ export function CallSimulator() {
   const [showEscalationPanel, setShowEscalationPanel] = useState(false)
   const [isEscalated, setIsEscalated] = useState(false)
   
+  // Quick replies state
+  const [quickReplies, setQuickReplies] = useState<string[]>([])
+  
   // Continuous voice mode state
   const [continuousVoiceMode, setContinuousVoiceMode] = useState(true) // Enable by default
   
@@ -783,6 +786,71 @@ export function CallSimulator() {
     })
   }
 
+  // Handle quick reply click
+  const handleQuickReply = (reply: string) => {
+    setInput(reply)
+    setQuickReplies([]) // Clear quick replies after selection
+    // Auto-send after a brief delay to show the input
+    setTimeout(() => {
+      if (reply && isCallActive && callId && agentState.status !== 'processing') {
+        handleSendMessageWithText(reply)
+      }
+    }, 100)
+  }
+  
+  // Helper to send a specific message text
+  const handleSendMessageWithText = async (messageText: string) => {
+    if (!messageText.trim() || !isCallActive || !callId || agentState.status === 'processing') {
+      return
+    }
+    
+    setInput('')
+    setError(null)
+    stopSpeech()
+    setQuickReplies([]) // Clear quick replies when sending
+    
+    // ... rest of send logic handled by handleSendMessage
+    // This is a simplified version - the full logic is in handleSendMessage
+    addMessage({ role: 'customer', content: messageText })
+    setAgentState(prev => ({ ...prev, status: 'processing' }))
+    
+    const startTime = Date.now()
+    const result = await sendMessage(callId, messageText)
+    const processingTime = Date.now() - startTime
+    setIsLoading(false)
+
+    if (result.success && result.data) {
+      const data = result.data
+      const confidenceLevel = getConfidenceLevel(data.confidenceLevel)
+      const confidenceScore = getConfidenceScore(data.confidenceLevel)
+
+      setAgentState(prev => ({
+        ...prev,
+        status: 'speaking',
+        confidence: confidenceScore,
+        confidenceLevel,
+        shouldEscalate: data.shouldEscalate,
+        turnCount: prev.turnCount + 1,
+      }))
+
+      if (data.responseContent) {
+        addMessage({
+          role: 'agent',
+          content: data.responseContent,
+          metadata: { confidence: confidenceScore, processingTime },
+        })
+        await speakResponse(data.responseContent)
+      }
+      
+      if (data.suggestedReplies && data.suggestedReplies.length > 0) {
+        setQuickReplies(data.suggestedReplies)
+      }
+    } else {
+      setAgentState(prev => ({ ...prev, status: 'idle' }))
+      setError(result.error?.message || 'Failed to send message')
+    }
+  }
+
   const handleSendMessage = async () => {
     if (!input.trim() || !isCallActive || !callId || agentState.status === 'processing') {
       return
@@ -791,6 +859,7 @@ export function CallSimulator() {
     const userMessage = input.trim()
     setInput('')
     setError(null)
+    setQuickReplies([]) // Clear quick replies when sending
     
     // Stop any ongoing TTS
     stopSpeech()
@@ -846,6 +915,14 @@ export function CallSimulator() {
         // Speak the response
         await speakResponse(data.responseContent)
       }
+      
+      // Update quick replies from backend suggestions
+      if (data.suggestedReplies && data.suggestedReplies.length > 0) {
+        setQuickReplies(data.suggestedReplies)
+      } else {
+        // Clear quick replies if none provided
+        setQuickReplies([])
+      }
 
       // Handle escalation with smooth transition
       if (data.shouldEscalate && !isEscalated) {
@@ -853,6 +930,7 @@ export function CallSimulator() {
         stopListening()
         setContinuousVoiceMode(false)
         setIsEscalated(true)
+        setQuickReplies([]) // Clear quick replies on escalation
         
         // AI acknowledges the escalation politely
         const transferMessage = "I understand you'd like to speak with a human agent. Let me transfer you now. A support specialist will be with you shortly."
@@ -1097,14 +1175,18 @@ export function CallSimulator() {
                 
                 {/* Processing indicator - shows while waiting for AI response */}
                 {agentState.status === 'processing' && (
-                  <div className={`${styles.message} ${styles.agent}`}>
+                  <div className={`${styles.message} ${styles.agent} ${styles.typing}`}>
                     <div className={styles.messageAvatar}>
                       <Bot size={16} />
                     </div>
                     <div className={styles.messageContent}>
-                      <div className={styles.processing}>
-                        <Loader2 size={16} className={styles.spinning} />
-                        <span className={styles.processingText}>Getting AI response...</span>
+                      <div className={styles.typingIndicator}>
+                        <div className={styles.typingDots}>
+                          <span className={styles.dot} />
+                          <span className={styles.dot} />
+                          <span className={styles.dot} />
+                        </div>
+                        <span className={styles.typingText}>AI is thinking...</span>
                       </div>
                     </div>
                   </div>
@@ -1124,6 +1206,22 @@ export function CallSimulator() {
                         </span>
                       </div>
                     </div>
+                  </div>
+                )}
+                
+                {/* Quick Reply Suggestions */}
+                {quickReplies.length > 0 && agentState.status !== 'processing' && !isEscalated && (
+                  <div className={styles.quickReplies}>
+                    {quickReplies.map((reply, index) => (
+                      <button
+                        key={index}
+                        className={styles.quickReplyButton}
+                        onClick={() => handleQuickReply(reply)}
+                        disabled={agentState.status === 'processing'}
+                      >
+                        {reply}
+                      </button>
+                    ))}
                   </div>
                 )}
                 

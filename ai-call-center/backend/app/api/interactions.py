@@ -3,13 +3,18 @@ Interaction API Endpoints
 
 Thin controllers for managing customer interactions.
 All business logic is delegated to the CallOrchestrator.
+
+Includes streaming endpoint for real-time AI responses.
 """
 
+import asyncio
+import json
 from datetime import datetime, timezone
-from typing import Optional
+from typing import AsyncGenerator, Optional
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.core.models import (
@@ -22,6 +27,85 @@ from app.services.orchestrator import (
     OrchestrationPhase,
     OrchestrationResult,
 )
+from app.core.models import IntentCategory, EmotionalState
+
+
+# -----------------------------------------------------------------------------
+# Quick Reply Generator
+# -----------------------------------------------------------------------------
+
+def _generate_quick_replies(
+    intent: Optional[IntentCategory],
+    emotion: Optional[EmotionalState],
+    requires_followup: bool,
+) -> list[str]:
+    """
+    Generate contextual quick reply suggestions for the customer.
+    
+    These help guide the conversation and speed up interactions.
+    """
+    replies = []
+    
+    # Context-specific replies based on intent
+    intent_replies = {
+        IntentCategory.BILLING_INQUIRY: [
+            "Show my current balance",
+            "View recent charges",
+            "Payment options",
+        ],
+        IntentCategory.TECHNICAL_SUPPORT: [
+            "I've tried restarting",
+            "Show troubleshooting steps",
+            "Connect me to a specialist",
+        ],
+        IntentCategory.ACCOUNT_MANAGEMENT: [
+            "Update my email",
+            "Reset my password",
+            "View account settings",
+        ],
+        IntentCategory.ORDER_STATUS: [
+            "Track my order",
+            "Where's my package?",
+            "Change delivery address",
+        ],
+        IntentCategory.CANCELLATION: [
+            "I want to cancel",
+            "What are my options?",
+            "Talk to retention team",
+        ],
+        IntentCategory.PRODUCT_INFORMATION: [
+            "Compare products",
+            "Show features",
+            "What's the price?",
+        ],
+        IntentCategory.COMPLAINT: [
+            "Speak to a manager",
+            "File a formal complaint",
+            "I need a resolution now",
+        ],
+    }
+    
+    if intent and intent in intent_replies:
+        replies.extend(intent_replies[intent][:2])
+    
+    # Add emotion-sensitive replies
+    if emotion == EmotionalState.FRUSTRATED:
+        replies.append("I need to speak to someone")
+    elif emotion == EmotionalState.CONFUSED:
+        replies.append("Can you explain that again?")
+    elif emotion == EmotionalState.SATISFIED:
+        replies.append("That's all, thank you!")
+    
+    # Add generic helpful options
+    if requires_followup:
+        replies.append("Yes, that's right")
+        replies.append("No, I meant something else")
+    else:
+        if "That's all, thank you!" not in replies:
+            replies.append("That's all I needed")
+    
+    # Limit to 4 suggestions for clean UX
+    return replies[:4]
 
 
 # -----------------------------------------------------------------------------
@@ -82,6 +166,14 @@ class SendMessageResponse(BaseModel):
     escalation_reason: Optional[str] = None
     confidence_level: Optional[str] = None
     processing_time_ms: int
+    
+    # Quick replies for UX improvement
+    suggested_replies: list[str] = Field(
+        default_factory=list,
+        description="Suggested quick reply options for the customer"
+    )
+    detected_intent: Optional[str] = None
+    detected_emotion: Optional[str] = None
 
 
 class EndInteractionRequest(BaseModel):
@@ -286,9 +378,18 @@ async def send_message(
             if result.escalation_decision.escalation_reason:
                 response.escalation_reason = result.escalation_decision.escalation_reason.value
         
-        # Add confidence level if available
+        # Add confidence level, intent, emotion, and quick replies if available
         if result.primary_output:
             response.confidence_level = result.primary_output.confidence.level.value
+            response.detected_intent = result.primary_output.detected_intent.value if result.primary_output.detected_intent else None
+            response.detected_emotion = result.primary_output.detected_emotion.value if result.primary_output.detected_emotion else None
+            
+            # Generate quick reply suggestions based on context
+            response.suggested_replies = _generate_quick_replies(
+                result.primary_output.detected_intent,
+                result.primary_output.detected_emotion,
+                result.primary_output.requires_followup,
+            )
         
         return response
         
@@ -299,6 +400,125 @@ async def send_message(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process message: {str(e)}",
         )
+
+
+# -----------------------------------------------------------------------------
+# Streaming Endpoint
+# -----------------------------------------------------------------------------
+
+async def stream_response_generator(
+    interaction_id: UUID,
+    content: str,
+    metadata: Optional[dict],
+) -> AsyncGenerator[str, None]:
+    """
+    Generator for streaming AI response via SSE.
+    
+    Sends events:
+    - status: Processing status updates
+    - token: Individual response tokens (simulated word-by-word)
+    - complete: Final result with metadata
+    - error: If something goes wrong
+    """
+    orchestrator = get_orchestrator()
+    
+    try:
+        # Send initial status
+        yield f"data: {json.dumps({'event': 'status', 'data': {'phase': 'processing', 'message': 'Processing your request...'}})}\n\n"
+        await asyncio.sleep(0.1)
+        
+        # Process through orchestrator
+        result: OrchestrationResult = await orchestrator.process_message(
+            interaction_id=interaction_id,
+            content=content,
+            metadata=metadata,
+        )
+        
+        if result.error:
+            yield f"data: {json.dumps({'event': 'error', 'data': {'message': result.error}})}\n\n"
+            return
+        
+        # Simulate streaming the response word by word
+        if result.response_content:
+            words = result.response_content.split()
+            accumulated = ""
+            
+            for i, word in enumerate(words):
+                accumulated += word + " "
+                yield f"data: {json.dumps({'event': 'token', 'data': {'token': word + ' ', 'accumulated': accumulated.strip(), 'progress': (i + 1) / len(words)}})}\n\n"
+                # Simulate typing delay (20-50ms per word)
+                await asyncio.sleep(0.02 + (len(word) * 0.005))
+        
+        # Send complete event with full metadata
+        complete_data = {
+            'event': 'complete',
+            'data': {
+                'response': result.response_content,
+                'should_escalate': result.should_escalate,
+                'processing_time_ms': result.total_duration_ms,
+                'escalation_type': result.escalation_decision.escalation_type.value if result.escalation_decision else None,
+                'escalation_reason': result.escalation_decision.escalation_reason.value if (result.escalation_decision and result.escalation_decision.escalation_reason) else None,
+                'confidence_level': result.primary_output.confidence.level.value if result.primary_output else None,
+                'confidence_score': result.primary_output.confidence.overall_score if result.primary_output else None,
+                'intent': result.primary_output.detected_intent.value if result.primary_output else None,
+                'emotion': result.primary_output.detected_emotion.value if result.primary_output else None,
+            }
+        }
+        yield f"data: {json.dumps(complete_data)}\n\n"
+        
+    except Exception as e:
+        yield f"data: {json.dumps({'event': 'error', 'data': {'message': str(e)}})}\n\n"
+
+
+@router.post(
+    "/{interaction_id}/message/stream",
+    response_class=StreamingResponse,
+    responses={
+        404: {"description": "Interaction not found"},
+        500: {"description": "Internal error"},
+    },
+)
+async def send_message_stream(
+    interaction_id: UUID,
+    request: SendMessageRequest,
+):
+    """
+    Send a message and receive streaming AI response via SSE.
+    
+    Returns a Server-Sent Events stream with:
+    - status: Processing phase updates
+    - token: Individual response tokens (streamed as they arrive)
+    - complete: Final result with full metadata
+    - error: If an error occurs
+    
+    This provides a more responsive UX as users see the response
+    being typed out in real-time rather than waiting for the full response.
+    """
+    orchestrator = get_orchestrator()
+    
+    # Validate interaction exists
+    state = orchestrator.get_state(interaction_id)
+    if not state:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Interaction {interaction_id} not found",
+        )
+    
+    if state.is_completed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Interaction has already ended",
+        )
+    
+    return StreamingResponse(
+        stream_response_generator(interaction_id, request.content, request.metadata),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        }
+    )
 
 
 @router.post(

@@ -4,8 +4,8 @@ Knowledge Base Service
 Loads and provides access to the knowledge base CSV files for AI agents.
 This enables context-aware responses based on customer, product, and policy data.
 
-Uses cosine similarity for semantic matching when embeddings are available,
-with fallback to keyword matching for offline operation.
+Uses sentence-transformer embeddings for true semantic search when available,
+with fallback to TF-IDF cosine similarity for offline operation.
 """
 
 import csv
@@ -21,6 +21,17 @@ logger = logging.getLogger(__name__)
 
 # Path to data directory
 DATA_DIR = Path(__file__).parent.parent.parent / "data"
+
+# Try to import sentence-transformers for semantic search
+try:
+    from sentence_transformers import SentenceTransformer
+    import numpy as np
+    EMBEDDINGS_AVAILABLE = True
+    logger.info("Sentence-transformers available for semantic search")
+except ImportError:
+    EMBEDDINGS_AVAILABLE = False
+    np = None
+    logger.warning("sentence-transformers not installed, using TF-IDF fallback")
 
 
 def _tokenize(text: str) -> List[str]:
@@ -64,14 +75,37 @@ def _cosine_similarity(vec1: Dict[str, float], vec2: Dict[str, float]) -> float:
     return dot_product / (math.sqrt(mag1) * math.sqrt(mag2))
 
 
+def _embedding_cosine_similarity(vec1: "np.ndarray", vec2: "np.ndarray") -> float:
+    """Compute cosine similarity between two embedding vectors."""
+    if vec1 is None or vec2 is None:
+        return 0.0
+    dot = np.dot(vec1, vec2)
+    norm = np.linalg.norm(vec1) * np.linalg.norm(vec2)
+    return float(dot / norm) if norm > 0 else 0.0
+
+
 class KnowledgeBase:
     """
     In-memory knowledge base loaded from CSV files.
     Provides search and lookup methods for AI agents.
-    Uses cosine similarity for better semantic matching.
+    
+    Uses sentence-transformer embeddings for true semantic search when available,
+    with fallback to TF-IDF cosine similarity.
+    
+    Semantic search means:
+    - "I want my money back" matches "refund policy"
+    - "can't login" matches "authentication issues"
+    - "shipment taking forever" matches "delivery delays"
     """
     
-    def __init__(self):
+    def __init__(self, use_embeddings: bool = True):
+        """
+        Initialize the knowledge base.
+        
+        Args:
+            use_embeddings: Whether to use semantic embeddings (True by default).
+                           Falls back to TF-IDF if embeddings unavailable.
+        """
         self._knowledge: List[Dict[str, str]] = []
         self._customers: Dict[str, Dict[str, Any]] = {}
         self._products: Dict[str, Dict[str, Any]] = {}
@@ -79,10 +113,20 @@ class KnowledgeBase:
         self._faqs: List[Dict[str, Any]] = []
         self._loaded = False
         
-        # Pre-computed TF vectors for faster similarity search
+        # Pre-computed TF vectors for faster similarity search (fallback)
         self._knowledge_vectors: List[Tuple[Dict[str, float], Dict[str, str]]] = []
         self._faq_vectors: List[Tuple[Dict[str, float], Dict[str, Any]]] = []
         self._product_vectors: List[Tuple[Dict[str, float], Dict[str, Any]]] = []
+        
+        # Sentence-transformer embeddings for semantic search
+        self._use_embeddings = use_embeddings and EMBEDDINGS_AVAILABLE
+        self._embedding_model: Optional[SentenceTransformer] = None
+        self._knowledge_embeddings: Optional["np.ndarray"] = None
+        self._faq_embeddings: Optional["np.ndarray"] = None
+        self._product_embeddings: Optional["np.ndarray"] = None
+        self._knowledge_texts: List[str] = []
+        self._faq_texts: List[str] = []
+        self._product_texts: List[str] = []
     
     def load(self) -> None:
         """Load all CSV data files into memory."""
@@ -96,8 +140,14 @@ class KnowledgeBase:
             self._load_orders()
             self._load_faqs()
             self._build_vectors()
+            
+            # Build semantic embeddings if available
+            if self._use_embeddings:
+                self._build_embeddings()
+            
             self._loaded = True
-            logger.info("Knowledge base loaded successfully with cosine similarity support")
+            search_method = "semantic embeddings" if self._use_embeddings else "TF-IDF"
+            logger.info(f"Knowledge base loaded successfully with {search_method} search")
         except Exception as e:
             logger.error(f"Failed to load knowledge base: {e}")
     
@@ -186,19 +236,140 @@ class KnowledgeBase:
         
         logger.info(f"Built {len(self._knowledge_vectors)} KB vectors, {len(self._faq_vectors)} FAQ vectors, {len(self._product_vectors)} product vectors")
     
+    def _build_embeddings(self) -> None:
+        """
+        Build sentence-transformer embeddings for semantic search.
+        
+        Uses the lightweight 'all-MiniLM-L6-v2' model (80MB) which provides
+        good semantic understanding with fast inference.
+        """
+        if not EMBEDDINGS_AVAILABLE:
+            logger.warning("Cannot build embeddings: sentence-transformers not installed")
+            return
+        
+        try:
+            # Load the embedding model (cached after first load)
+            logger.info("Loading sentence-transformer model for semantic search...")
+            self._embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+            
+            # Build knowledge base embeddings
+            self._knowledge_texts = []
+            for entry in self._knowledge:
+                text = f"{entry.get('problem', '')} {entry.get('keywords', '')} {entry.get('solution', '')[:200]}"
+                self._knowledge_texts.append(text)
+            
+            if self._knowledge_texts:
+                self._knowledge_embeddings = self._embedding_model.encode(
+                    self._knowledge_texts,
+                    convert_to_numpy=True,
+                    show_progress_bar=False
+                )
+                logger.info(f"Built {len(self._knowledge_texts)} knowledge embeddings")
+            
+            # Build FAQ embeddings
+            self._faq_texts = []
+            for faq in self._faqs:
+                text = f"{faq.get('question', '')} {faq.get('keywords', '')} {faq.get('answer', '')[:200]}"
+                self._faq_texts.append(text)
+            
+            if self._faq_texts:
+                self._faq_embeddings = self._embedding_model.encode(
+                    self._faq_texts,
+                    convert_to_numpy=True,
+                    show_progress_bar=False
+                )
+                logger.info(f"Built {len(self._faq_texts)} FAQ embeddings")
+            
+            # Build product embeddings
+            self._product_texts = []
+            for product in self._products.values():
+                text = f"{product.get('name', '')} {product.get('common_issues', '')} {product.get('description', '')}"
+                self._product_texts.append(text)
+            
+            if self._product_texts:
+                self._product_embeddings = self._embedding_model.encode(
+                    self._product_texts,
+                    convert_to_numpy=True,
+                    show_progress_bar=False
+                )
+                logger.info(f"Built {len(self._product_texts)} product embeddings")
+                
+        except Exception as e:
+            logger.error(f"Failed to build embeddings: {e}")
+            self._use_embeddings = False
+    
+    def _semantic_search(
+        self, 
+        query: str, 
+        embeddings: Optional["np.ndarray"], 
+        items: List[Any],
+        limit: int = 3,
+        min_score: float = 0.3,
+    ) -> List[Tuple[float, Any]]:
+        """
+        Perform semantic search using embeddings.
+        
+        Args:
+            query: Search query
+            embeddings: Pre-computed embeddings matrix
+            items: Original items (dicts) corresponding to embeddings
+            limit: Max results to return
+            min_score: Minimum similarity score threshold
+            
+        Returns:
+            List of (score, item) tuples sorted by relevance
+        """
+        if embeddings is None or self._embedding_model is None or len(items) == 0:
+            return []
+        
+        # Encode query
+        query_embedding = self._embedding_model.encode([query], convert_to_numpy=True)[0]
+        
+        # Compute similarities
+        similarities = np.dot(embeddings, query_embedding) / (
+            np.linalg.norm(embeddings, axis=1) * np.linalg.norm(query_embedding)
+        )
+        
+        # Get top results above threshold
+        results = []
+        for idx, score in enumerate(similarities):
+            if score >= min_score and idx < len(items):
+                results.append((float(score), items[idx]))
+        
+        # Sort by score descending
+        results.sort(key=lambda x: x[0], reverse=True)
+        return results[:limit]
+    
     # -------------------------------------------------------------------------
-    # Search Methods with Cosine Similarity
+    # Search Methods with Semantic Search (falls back to TF-IDF)
     # -------------------------------------------------------------------------
     
     def search_solutions(self, query: str, limit: int = 3, min_score: float = 0.05) -> List[Dict[str, str]]:
         """
-        Search knowledge base for relevant solutions using cosine similarity.
-        Falls back to keyword matching if needed.
+        Search knowledge base for relevant solutions.
+        
+        Uses semantic embeddings if available, otherwise falls back to TF-IDF.
+        Semantic search finds matches even with different wording:
+        - "I want my money back" → finds "refund policy"
+        - "can't access my account" → finds "login issues"
         """
         if not self._loaded:
             self.load()
         
-        # Compute query vector
+        # Try semantic search first
+        if self._use_embeddings and self._knowledge_embeddings is not None:
+            semantic_results = self._semantic_search(
+                query,
+                self._knowledge_embeddings,
+                self._knowledge,
+                limit=limit,
+                min_score=0.25,  # Semantic threshold (higher for better precision)
+            )
+            if semantic_results:
+                logger.debug(f"Semantic search found {len(semantic_results)} results for: {query[:50]}")
+                return [entry for _, entry in semantic_results]
+        
+        # Fallback to TF-IDF cosine similarity
         query_tokens = _tokenize(query)
         query_tf = _compute_tf(query_tokens)
         
@@ -222,10 +393,25 @@ class KnowledgeBase:
         return [entry for _, entry in scored_results[:limit]]
     
     def search_faqs(self, query: str, limit: int = 3, min_score: float = 0.05) -> List[Dict[str, Any]]:
-        """Search FAQs using cosine similarity."""
+        """
+        Search FAQs using semantic search with TF-IDF fallback.
+        """
         if not self._loaded:
             self.load()
         
+        # Try semantic search first
+        if self._use_embeddings and self._faq_embeddings is not None:
+            semantic_results = self._semantic_search(
+                query,
+                self._faq_embeddings,
+                self._faqs,
+                limit=limit,
+                min_score=0.25,
+            )
+            if semantic_results:
+                return [faq for _, faq in semantic_results]
+        
+        # Fallback to TF-IDF
         query_tokens = _tokenize(query)
         query_tf = _compute_tf(query_tokens)
         
@@ -247,10 +433,26 @@ class KnowledgeBase:
         return [faq for _, faq in scored_results[:limit]]
     
     def search_products(self, query: str, limit: int = 5, min_score: float = 0.03) -> List[Dict[str, Any]]:
-        """Search products using cosine similarity."""
+        """
+        Search products using semantic search with TF-IDF fallback.
+        """
         if not self._loaded:
             self.load()
         
+        # Try semantic search first
+        product_list = list(self._products.values())
+        if self._use_embeddings and self._product_embeddings is not None:
+            semantic_results = self._semantic_search(
+                query,
+                self._product_embeddings,
+                product_list,
+                limit=limit,
+                min_score=0.25,
+            )
+            if semantic_results:
+                return [product for _, product in semantic_results]
+        
+        # Fallback to TF-IDF
         query_tokens = _tokenize(query)
         query_tf = _compute_tf(query_tokens)
         

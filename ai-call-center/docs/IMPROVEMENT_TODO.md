@@ -312,13 +312,13 @@
 
 | Order | Feature | Impact | Effort | Status |
 |-------|---------|--------|--------|--------|
-| 1 | Typing Indicator | High | 30 min | ⬜ |
-| 2 | Conversation Memory | High | 2 hours | ⬜ |
-| 3 | Streaming Responses | Very High | 3 hours | ⬜ |
-| 4 | Semantic Embeddings | High | 2 hours | ⬜ |
-| 5 | Intent Confirmation | Medium | 1 hour | ⬜ |
-| 6 | Quick Replies | Medium | 1 hour | ⬜ |
-| 7 | Source Attribution | Medium | 1 hour | ⬜ |
+| 1 | Typing Indicator | High | 30 min | ✅ |
+| 2 | Conversation Memory | High | 2 hours | ✅ |
+| 3 | Streaming Responses | Very High | 3 hours | ✅ |
+| 4 | Semantic Embeddings | High | 2 hours | ✅ |
+| 5 | Intent Confirmation | Medium | 1 hour | ✅ |
+| 6 | Quick Replies | Medium | 1 hour | ✅ |
+| 7 | Source Attribution | Medium | 1 hour | 🔄 |
 | 8 | Voice Visualizer | Medium | 1 hour | ⬜ |
 | 9 | WebSocket | High | 3 hours | ⬜ |
 | 10 | Sentiment Tracking | Medium | 2 hours | ⬜ |
@@ -333,9 +333,18 @@
 ## Progress Tracking
 
 **Total Tasks:** 80+  
-**Completed:** 0  
-**In Progress:** 0  
-**Remaining:** All
+**Completed:** 6  
+**In Progress:** 1  
+**Remaining:** 73+
+
+### Completed Features (January 18, 2026)
+
+1. ✅ **Typing Indicator** - Enhanced "AI is thinking..." animation with bouncing dots
+2. ✅ **Conversation Memory** - Context store now provides formatted history to LLM for multi-turn context
+3. ✅ **Streaming Responses** - SSE endpoint for real-time token streaming + frontend generator
+4. ✅ **Semantic Embeddings** - Sentence-transformer integration for true semantic search
+5. ✅ **Intent Confirmation** - Clarifying questions when confidence is 40-70%
+6. ✅ **Quick Replies** - Backend generates contextual quick reply suggestions, frontend displays buttons
 
 ---
 
