@@ -468,7 +468,7 @@ class PrimaryAgent(BaseAgent):
         """
         Keyword-based fallback analysis when LLM is unavailable.
         
-        Uses deterministic keyword matching for consistent behavior.
+        Uses knowledge base for actual solutions, not just generic templates.
         """
         # Detect intent using keywords
         intent, intent_confidence, intent_factors = self._detect_intent_keywords(content)
@@ -476,8 +476,13 @@ class PrimaryAgent(BaseAgent):
         # Detect emotion using keywords
         emotion, emotion_confidence, emotion_factors = self._detect_emotion_keywords(content)
         
-        # Generate response using templates
-        response = self._generate_fallback_response(intent, emotion)
+        # Generate response using KNOWLEDGE BASE (not just templates)
+        response, kb_used = self._generate_knowledge_based_response(content, intent, emotion)
+        
+        # Boost confidence if we found a KB match
+        if kb_used:
+            intent_confidence = min(0.90, intent_confidence + 0.15)
+            intent_factors.append("Knowledge base match found")
         
         return {
             "intent": intent,
@@ -485,10 +490,11 @@ class PrimaryAgent(BaseAgent):
             "intent_confidence": intent_confidence,
             "emotion_confidence": emotion_confidence,
             "response": response,
-            "reasoning": ["Using keyword-based fallback analysis"],
+            "reasoning": ["Using knowledge-base enhanced fallback analysis" if kb_used else "Using keyword-based fallback analysis"],
             "intent_factors": intent_factors,
             "emotion_factors": emotion_factors,
             "used_fallback": True,
+            "kb_used": kb_used,
         }
 
     def _detect_intent_keywords(
@@ -589,12 +595,75 @@ class PrimaryAgent(BaseAgent):
         
         return best_emotion, best_score, factors
 
+    def _generate_knowledge_based_response(
+        self,
+        content: str,
+        intent: IntentCategory,
+        emotion: EmotionalState,
+    ) -> Tuple[str, bool]:
+        """
+        Generate response using KNOWLEDGE BASE first, fallback templates second.
+        
+        Returns:
+            Tuple of (response_text, kb_was_used)
+        """
+        kb = get_knowledge_base()
+        
+        # Build emotional prefix
+        emotional_prefix = ""
+        if emotion == EmotionalState.FRUSTRATED:
+            emotional_prefix = "I understand this situation is frustrating. "
+        elif emotion == EmotionalState.ANGRY:
+            emotional_prefix = "I sincerely apologize for any inconvenience. "
+        elif emotion == EmotionalState.ANXIOUS:
+            emotional_prefix = "I understand this is urgent for you. "
+        elif emotion == EmotionalState.CONFUSED:
+            emotional_prefix = "Let me help clarify this for you. "
+        
+        # FIRST: Try to find a solution in the knowledge base
+        solutions = kb.search_solutions(content, limit=1, min_score=0.08)
+        if solutions:
+            sol = solutions[0]
+            problem = sol.get('problem', '')
+            solution = sol.get('solution', '')
+            
+            # Format the solution nicely
+            if solution:
+                # Make it conversational
+                response = f"I can help with that! {solution}"
+                return emotional_prefix + response, True
+        
+        # SECOND: Try FAQs
+        faqs = kb.search_faqs(content, limit=1, min_score=0.08)
+        if faqs:
+            faq = faqs[0]
+            answer = faq.get('answer', '')
+            if answer:
+                return emotional_prefix + answer, True
+        
+        # THIRD: Check for product-specific issues
+        products = kb.search_products(content, limit=1, min_score=0.1)
+        if products:
+            prod = products[0]
+            name = prod.get('name', '')
+            troubleshooting = prod.get('troubleshooting_steps', '')
+            if troubleshooting:
+                response = f"For your {name}, here's what I recommend: {troubleshooting}"
+                return emotional_prefix + response, True
+        
+        # FALLBACK: Use generic templates if no KB match
+        base_response = FALLBACK_RESPONSES.get(
+            intent,
+            FALLBACK_RESPONSES[IntentCategory.UNKNOWN]
+        )
+        return emotional_prefix + base_response, False
+    
     def _generate_fallback_response(
         self,
         intent: IntentCategory,
         emotion: EmotionalState,
     ) -> str:
-        """Generate response using fallback templates."""
+        """Generate response using fallback templates (legacy method)."""
         base_response = FALLBACK_RESPONSES.get(
             intent,
             FALLBACK_RESPONSES[IntentCategory.UNKNOWN]
