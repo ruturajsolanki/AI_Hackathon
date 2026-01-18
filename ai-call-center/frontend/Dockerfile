@@ -3,6 +3,10 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Accept build argument for API URL
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
+
 # Copy package files
 COPY package*.json ./
 
@@ -12,8 +16,8 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Build the app
-RUN npm run build
+# Build the app (VITE_API_URL will be baked in)
+RUN echo "Building with VITE_API_URL=$VITE_API_URL" && npm run build
 
 # Production stage
 FROM node:20-alpine AS runner
