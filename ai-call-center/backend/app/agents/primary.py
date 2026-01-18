@@ -608,6 +608,7 @@ class PrimaryAgent(BaseAgent):
             Tuple of (response_text, kb_was_used)
         """
         kb = get_knowledge_base()
+        logger.info(f"[KB] Searching for: '{content}'")
         
         # Build emotional prefix
         emotional_prefix = ""
@@ -622,15 +623,18 @@ class PrimaryAgent(BaseAgent):
         
         # FIRST: Try to find a solution in the knowledge base
         solutions = kb.search_solutions(content, limit=1, min_score=0.08)
+        logger.info(f"[KB] Found {len(solutions)} solutions")
         if solutions:
             sol = solutions[0]
             problem = sol.get('problem', '')
             solution = sol.get('solution', '')
+            logger.info(f"[KB] Best match: '{problem}'")
             
             # Format the solution nicely
             if solution:
                 # Make it conversational
                 response = f"I can help with that! {solution}"
+                logger.info(f"[KB] Using KB solution!")
                 return emotional_prefix + response, True
         
         # SECOND: Try FAQs
