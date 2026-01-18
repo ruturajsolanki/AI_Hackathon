@@ -414,3 +414,132 @@ async def get_history_stats() -> dict:
         "average_duration_seconds": round(avg_duration, 1),
         "by_channel": channels,
     }
+
+
+# -----------------------------------------------------------------------------
+# Handoff Summary Endpoint
+# -----------------------------------------------------------------------------
+
+class HandoffSummaryResponse(BaseModel):
+    """Response model for handoff summary."""
+    interaction_id: str
+    priority: str
+    priority_reason: str
+    customer_intent: str
+    current_emotion: str
+    emotion_trajectory: str
+    total_messages: int
+    ai_response_count: int
+    conversation_duration_seconds: int
+    issue_summary: str
+    key_points: list[str]
+    customer_requests: list[str]
+    ai_attempts: int
+    average_confidence: float
+    escalation_reason: str
+    what_ai_tried: list[str]
+    suggested_actions: list[str]
+    relevant_policies: list[str]
+    transcript: list[dict]
+
+
+@router.get(
+    "/interactions/{interaction_id}/handoff",
+    response_model=HandoffSummaryResponse,
+    summary="Get Human Handoff Summary",
+    description="Get AI-generated summary for human agent taking over an escalated call.",
+)
+async def get_handoff_summary(interaction_id: UUID) -> HandoffSummaryResponse:
+    """
+    Generate a comprehensive handoff summary for human agents.
+    
+    When a call is escalated, this provides everything a human needs:
+    - Customer context and sentiment
+    - What the AI tried
+    - Suggested next steps
+    - Full transcript
+    """
+    from app.services.handoff import get_handoff_service
+    
+    store = get_store()
+    
+    # Get interaction
+    interaction = store.get_interaction(interaction_id)
+    if not interaction:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Interaction {interaction_id} not found",
+        )
+    
+    # Get messages
+    raw_messages = store.get_messages(interaction_id)
+    messages = [
+        {
+            "role": m.role,
+            "content": m.content,
+            "timestamp": m.timestamp,
+            "metadata": m.metadata,
+        }
+        for m in raw_messages
+    ]
+    
+    # Get agent decisions
+    raw_decisions = store.get_agent_decisions(interaction_id)
+    decisions = [
+        {
+            "agent_type": d.agent_type,
+            "decision_type": d.decision_type,
+            "confidence": d.confidence,
+            "detected_intent": d.details.get("detected_intent"),
+            "detected_emotion": d.details.get("detected_emotion"),
+        }
+        for d in raw_decisions
+    ]
+    
+    # Find escalation reason
+    escalation_reason = "Low confidence"
+    for d in raw_decisions:
+        if d.agent_type == "escalation":
+            reason = d.details.get("escalation_reason") or d.details.get("reason")
+            if reason:
+                escalation_reason = reason
+                break
+    
+    # Get final confidence
+    final_confidence = 0.5
+    for d in reversed(raw_decisions):
+        if d.confidence:
+            final_confidence = d.confidence
+            break
+    
+    # Generate handoff summary
+    handoff_service = get_handoff_service()
+    summary = handoff_service.generate_handoff_summary(
+        interaction_id=interaction_id,
+        messages=messages,
+        agent_decisions=decisions,
+        escalation_reason=escalation_reason,
+        final_confidence=final_confidence,
+    )
+    
+    return HandoffSummaryResponse(
+        interaction_id=str(summary.interaction_id),
+        priority=summary.priority.value,
+        priority_reason=summary.priority_reason,
+        customer_intent=summary.customer_intent,
+        current_emotion=summary.current_emotion,
+        emotion_trajectory=summary.emotion_trajectory,
+        total_messages=summary.total_messages,
+        ai_response_count=summary.ai_response_count,
+        conversation_duration_seconds=summary.conversation_duration_seconds,
+        issue_summary=summary.issue_summary,
+        key_points=summary.key_points,
+        customer_requests=summary.customer_requests,
+        ai_attempts=summary.ai_attempts,
+        average_confidence=summary.average_confidence,
+        escalation_reason=summary.escalation_reason,
+        what_ai_tried=summary.what_ai_tried,
+        suggested_actions=summary.suggested_actions,
+        relevant_policies=summary.relevant_policies,
+        transcript=summary.transcript,
+    )
