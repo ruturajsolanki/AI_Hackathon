@@ -494,6 +494,58 @@ class PrimaryAgent(BaseAgent):
         # Detect emotion using keywords
         emotion, emotion_confidence, emotion_factors = self._detect_emotion_keywords(content)
         
+        # FIRST: Check if user provided an order number - if so, look it up directly!
+        kb = get_knowledge_base()
+        order_id = kb._extract_order_id(content)
+        if order_id:
+            order = kb.get_order(order_id)
+            if order:
+                # Found the order! Return actual order data
+                status = order.get('status', 'unknown').upper()
+                tracking = order.get('tracking_number', '')
+                est_delivery = order.get('estimated_delivery', '')
+                shipping = order.get('shipping_method', 'standard')
+                
+                response_parts = [f"I found your order {order_id}! It's currently **{status}**."]
+                
+                if status == "SHIPPED" and tracking:
+                    response_parts.append(f"Your tracking number is {tracking}.")
+                if est_delivery:
+                    response_parts.append(f"Estimated delivery: {est_delivery}.")
+                if shipping:
+                    response_parts.append(f"Shipping method: {shipping}.")
+                    
+                response_parts.append("Is there anything else I can help you with?")
+                
+                return {
+                    "intent": IntentCategory.ORDER_STATUS,
+                    "emotion": emotion,
+                    "intent_confidence": 0.95,
+                    "emotion_confidence": emotion_confidence,
+                    "response": " ".join(response_parts),
+                    "reasoning": [f"Order {order_id} found in database"],
+                    "intent_factors": [f"Order ID detected: {order_id}"],
+                    "emotion_factors": emotion_factors,
+                    "used_fallback": True,
+                    "kb_used": True,
+                    "source_attribution": f"Order: {order_id}",
+                }
+            else:
+                # Order ID provided but not found
+                return {
+                    "intent": IntentCategory.ORDER_STATUS,
+                    "emotion": emotion,
+                    "intent_confidence": 0.85,
+                    "emotion_confidence": emotion_confidence,
+                    "response": f"I couldn't find order {order_id} in our system. Could you please double-check the order number? It should be in your confirmation email.",
+                    "reasoning": [f"Order {order_id} not found in database"],
+                    "intent_factors": [f"Order ID detected but not found: {order_id}"],
+                    "emotion_factors": emotion_factors,
+                    "used_fallback": True,
+                    "kb_used": False,
+                    "source_attribution": None,
+                }
+        
         # Generate response using KNOWLEDGE BASE (not just templates)
         response, kb_used, source_attribution = self._generate_knowledge_based_response(content, intent, emotion)
         
