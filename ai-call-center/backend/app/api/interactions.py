@@ -117,13 +117,37 @@ router = APIRouter(prefix="/interactions", tags=["Interactions"])
 
 # Shared orchestrator instance (in production, use dependency injection)
 _orchestrator: Optional[CallOrchestrator] = None
+_last_provider: Optional[str] = None
+_last_ollama_url: Optional[str] = None
 
 
 def get_orchestrator() -> CallOrchestrator:
-    """Get or create the shared orchestrator instance."""
-    global _orchestrator
-    if _orchestrator is None:
+    """
+    Get or create the shared orchestrator instance.
+    
+    Recreates the orchestrator if the LLM provider has changed
+    (e.g., user switched from OpenAI to Ollama in settings).
+    """
+    global _orchestrator, _last_provider, _last_ollama_url
+    
+    # Check current provider config
+    from app.api.config import get_runtime_config
+    runtime_config = get_runtime_config()
+    current_provider = runtime_config.get_provider().value
+    current_ollama_url = runtime_config.get_ollama_url() if current_provider == "ollama" else None
+    
+    # Recreate orchestrator if provider changed or Ollama URL changed
+    provider_changed = _last_provider != current_provider
+    ollama_url_changed = current_provider == "ollama" and _last_ollama_url != current_ollama_url
+    
+    if _orchestrator is None or provider_changed or ollama_url_changed:
+        if provider_changed:
+            import logging
+            logging.getLogger(__name__).info(f"LLM provider changed from {_last_provider} to {current_provider}, recreating orchestrator")
         _orchestrator = CallOrchestrator()
+        _last_provider = current_provider
+        _last_ollama_url = current_ollama_url
+    
     return _orchestrator
 
 
