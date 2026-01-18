@@ -335,10 +335,9 @@ class Settings(BaseSettings):
     API_PREFIX: str = "/api"
     API_V1_PREFIX: str = "/api/v1"
     
-    # CORS (for development)
+    # CORS (for development) - accepts CORS_ORIGINS or ALLOWED_ORIGINS env var
     ALLOWED_ORIGINS: List[str] = Field(
-        default_factory=lambda: ["http://localhost:3000", "http://localhost:5173"],
-        validation_alias="CORS_ORIGINS"  # Also accept CORS_ORIGINS env var
+        default_factory=list
     )
     
     # Documentation
@@ -351,13 +350,29 @@ class Settings(BaseSettings):
     @classmethod
     def parse_origins(cls, v):
         """Parse comma-separated origins from env."""
-        # Also check for CORS_ORIGINS env var as fallback
         import os
-        if v is None or (isinstance(v, list) and len(v) == 0):
-            v = os.environ.get("CORS_ORIGINS", os.environ.get("ALLOWED_ORIGINS", ""))
-        if isinstance(v, str):
+        # Check for CORS_ORIGINS first, then ALLOWED_ORIGINS
+        cors_origins = os.environ.get("CORS_ORIGINS", "")
+        allowed_origins = os.environ.get("ALLOWED_ORIGINS", "")
+        
+        # Use whichever is set
+        env_value = cors_origins or allowed_origins
+        
+        if env_value:
+            origins = [o.strip() for o in env_value.split(",") if o.strip()]
+            if origins:
+                return origins
+        
+        # If v is already a list, use it
+        if isinstance(v, list) and v:
+            return v
+            
+        # If v is a string, parse it
+        if isinstance(v, str) and v:
             return [o.strip() for o in v.split(",") if o.strip()]
-        return v or []
+        
+        # Default fallback
+        return ["http://localhost:3000", "http://localhost:5173"]
     
     @model_validator(mode="after")
     def configure_for_environment(self):
