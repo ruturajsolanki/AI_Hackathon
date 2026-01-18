@@ -81,18 +81,10 @@ export function CallSimulator() {
   // Continuous voice mode state
   const [continuousVoiceMode, setContinuousVoiceMode] = useState(true) // Enable by default
   
-  // Handler for auto-sending speech (defined before hook to avoid stale closure)
-  const handleAutoSpeechEnd = useCallback(async (spokenText: string) => {
-    console.log('[AutoSpeechEnd] Received text:', spokenText)
-    if (!spokenText.trim() || !isCallActive || agentState.status === 'processing') {
-      return
-    }
-    // Clear input and send
-    setInput('')
-    // We'll call the actual send function via ref to avoid circular deps
-  }, [isCallActive, agentState.status])
+  // Ref to track if we should auto-restart listening
+  const shouldAutoRestartRef = useRef(false)
   
-  // Speech Recognition Hook - with continuous mode for hands-free calls
+  // Speech Recognition Hook - simplified, we control restart manually
   const {
     isListening,
     isSupported: isSTTSupported,
@@ -107,11 +99,10 @@ export function CallSimulator() {
     clearTranscript,
   } = useSpeechRecognition({
     language: 'en-US',
-    continuous: continuousVoiceMode && isCallActive, // Continuous during active call
+    continuous: false, // We'll manage restart manually for better control
     interimResults: true,
-    autoRestart: continuousVoiceMode && isCallActive, // Auto-restart in call
-    autoSendDelay: continuousVoiceMode ? 1500 : 0, // 1.5 second pause = auto-send
-    onSpeechEnd: handleAutoSpeechEnd,
+    autoRestart: false, // Manual control
+    autoSendDelay: 0, // Disabled - we handle it ourselves
   })
 
   // Refs
@@ -364,19 +355,30 @@ export function CallSimulator() {
 
     console.log('[sendVoiceMessage] Sending:', messageText)
     
+    // STOP listening while we process - prevents overlapping speech
+    if (isListening) {
+      stopListening()
+    }
+    stopSpeech() // Stop any current TTS
+    
+    // Clear the input and transcripts
+    setInput('')
+    clearTranscript()
+    
     // Add customer message to UI
     addMessage({
       role: 'customer',
       content: messageText,
     })
 
-    // Set processing state
+    // Set processing state - shows "Getting response..." indicator
     setAgentState(prev => ({ ...prev, status: 'processing' }))
     setIsLoading(true)
 
     const startTime = Date.now()
 
     // Call API
+    console.log('[sendVoiceMessage] Calling API with message:', messageText)
     const result = await sendMessage(callId, messageText)
     
     const processingTime = Date.now() - startTime
@@ -414,8 +416,16 @@ export function CallSimulator() {
           },
         })
 
-        // Speak the response
+        // Speak the response (speakResponse handles auto-restart of listening)
         await speakResponse(data.responseContent)
+      } else {
+        // No response content, restart listening manually
+        if (continuousVoiceMode && isCallActive) {
+          setTimeout(() => {
+            clearTranscript()
+            startListening()
+          }, 500)
+        }
       }
 
       // Handle escalation
@@ -845,7 +855,7 @@ export function CallSimulator() {
                   </article>
                 ))}
                 
-                {/* Processing indicator */}
+                {/* Processing indicator - shows while waiting for AI response */}
                 {agentState.status === 'processing' && (
                   <div className={`${styles.message} ${styles.agent}`}>
                     <div className={styles.messageAvatar}>
@@ -853,10 +863,8 @@ export function CallSimulator() {
                     </div>
                     <div className={styles.messageContent}>
                       <div className={styles.processing}>
-                        <span className={styles.processingDot} />
-                        <span className={styles.processingDot} />
-                        <span className={styles.processingDot} />
-                        <span className={styles.processingText}>Processing...</span>
+                        <Loader2 size={16} className={styles.spinning} />
+                        <span className={styles.processingText}>Getting AI response...</span>
                       </div>
                     </div>
                   </div>
@@ -981,10 +989,10 @@ export function CallSimulator() {
             <div className={styles.statusHeader}>
               <span className={`${styles.statusBadge} ${styles[agentState.status]}`}>
                 {agentState.status === 'idle' && 'Idle'}
-                {agentState.status === 'connecting' && '◌ Connecting'}
-                {agentState.status === 'listening' && '● Listening'}
-                {agentState.status === 'processing' && '◌ Processing'}
-                {agentState.status === 'speaking' && '◉ Speaking'}
+                {agentState.status === 'connecting' && '◌ Connecting...'}
+                {agentState.status === 'listening' && '● Listening for speech'}
+                {agentState.status === 'processing' && '◌ Getting AI response...'}
+                {agentState.status === 'speaking' && '◉ AI Speaking'}
                 {agentState.status === 'error' && '✕ Error'}
               </span>
             </div>
