@@ -1,0 +1,62 @@
+@startuml Customer_Journey_Simple
+
+skinparam backgroundColor #1a1a2e
+skinparam defaultFontColor #e8e8e8
+skinparam RoundCorner 10
+
+skinparam rectangle {
+    BackgroundColor #2d2d44
+    BorderColor #6366f1
+    FontColor #e8e8e8
+}
+
+skinparam diamond {
+    BackgroundColor #2d2d44
+    BorderColor #f59e0b
+    FontColor #e8e8e8
+}
+
+skinparam arrow {
+    Color #6366f1
+    Thickness 2
+}
+
+title <b>AI Call Center - Customer Journey</b>
+
+rectangle "**1. CUSTOMER STARTS CALL**\n(Voice or Chat)" as start #2d2d44
+
+rectangle "**2. AI GREETING**\nHello! How can I help you today?" as greeting #1e3a5f
+
+rectangle "**3. CUSTOMER STATES ISSUE**\nI want to check my order ORD10024" as issue #2d2d44
+
+rectangle "**4. AI PROCESSING**\n--\nIntent: order_status\nEmotion: neutral\nConfidence: 95%" as processing #1e3a5f
+
+rectangle "**5. KNOWLEDGE BASE LOOKUP**\n--\nOrder: ORD10024\nStatus: SHIPPED\nTracking: 1Z999..." as kb_lookup #06b6d4
+
+rectangle "**6. SUPERVISOR REVIEW**\n--\nQuality: PASSED\nCompliance: OK\nTone: Appropriate" as supervisor #f59e0b
+
+rectangle "**7. DELIVER RESPONSE**\nYour order is SHIPPED.\nTracking: 1Z999AA10123456799\nDelivery: Feb 5th" as response #1e3a5f
+
+diamond "Customer\nSatisfied?" as decision
+
+rectangle "**8A. RESOLVED**\n--\nStatus: RESOLVED\nGenerate Summary\nDownload Report" as resolved #10b981
+
+rectangle "**8B. ESCALATION**\n--\nCreate Ticket\nRoute to Human\nProvide Context" as escalated #ef4444
+
+rectangle "**9. HUMAN AGENT**\n--\nAccept Ticket\nLive Chat\nResolve Issue" as human #2d3748
+
+start --> greeting
+greeting --> issue
+issue --> processing
+processing --> kb_lookup
+kb_lookup --> supervisor
+supervisor --> response
+response --> decision
+
+decision --> resolved : Yes
+decision --> escalated : No - Frustrated
+
+escalated --> human
+human --> resolved
+
+@enduml
