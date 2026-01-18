@@ -604,56 +604,55 @@ export function CallSimulator() {
     }
   }
 
+  // Customer session URL for escalation
+  const [customerSessionUrl, setCustomerSessionUrl] = useState<string | null>(null)
+
   // Handle escalation to human agent
   const handleEscalateToHuman = async () => {
-    // Stop any ongoing speech/listening and disable continuous mode
+    // IMMEDIATELY stop everything
     stopSpeech()
-    if (isListening) stopListening()
-    setContinuousVoiceMode(false) // Stop auto-listening
+    stopListening()
+    setContinuousVoiceMode(false) // Disable auto-listening permanently
     
+    // Mark as escalated FIRST to prevent any new messages
     setIsEscalated(true)
-    setShowEscalationPanel(true)
+    setIsCallActive(false) // End the call immediately
     
-    // Update agent state to show escalation
+    // Update agent state
     setAgentState(prev => ({
       ...prev,
-      status: 'idle', // No longer listening
+      status: 'idle',
       shouldEscalate: true,
     }))
     
     addMessage({
       role: 'system',
-      content: '🔄 Transferring to human agent... Please hold.',
+      content: '🔄 Transferring to human agent...',
     })
     
-    // End the AI call session and get the session URL
+    // End the AI call session
     const currentCallId = callId
     if (currentCallId) {
-      await endCall(currentCallId)
+      try {
+        await endCall(currentCallId)
+      } catch (e) {
+        console.error('Error ending call:', e)
+      }
     }
     
     // Generate customer session URL
     const sessionId = currentCallId || crypto.randomUUID()
-    const customerSessionUrl = `${window.location.origin}/customer-session/${sessionId}`
+    const sessionUrl = `${window.location.origin}/customer-session/${sessionId}`
+    setCustomerSessionUrl(sessionUrl)
     
     addMessage({
       role: 'system',
-      content: `✅ Your call has been escalated to a human agent.`,
+      content: `✅ Call transferred! A ticket has been created for a human agent.`,
     })
     
-    addMessage({
-      role: 'system',
-      content: `📱 Customer Session Link: ${customerSessionUrl}`,
-    })
-    
-    addMessage({
-      role: 'system',
-      content: '👆 Open the link above in a new window to continue chatting with the human agent when they join.',
-    })
-    
-    // Reset call state
-    setIsCallActive(false)
+    // Clear call state
     setCallId(null)
+    setShowEscalationPanel(true)
   }
   
   // Close escalation panel and continue with human
@@ -875,6 +874,41 @@ export function CallSimulator() {
             </div>
           ) : (
             <>
+              {/* Customer Session Panel - shown after escalation */}
+              {isEscalated && customerSessionUrl && (
+                <div className={styles.escalationPanel}>
+                  <div className={styles.escalationIcon}>✅</div>
+                  <h3>Call Transferred to Human Agent</h3>
+                  <p>A ticket has been created. To continue chatting with the human agent, open the customer session:</p>
+                  <div className={styles.sessionLinkContainer}>
+                    <input 
+                      type="text" 
+                      value={customerSessionUrl} 
+                      readOnly 
+                      className={styles.sessionLinkInput}
+                    />
+                    <button 
+                      className={styles.copyLinkButton}
+                      onClick={() => {
+                        navigator.clipboard.writeText(customerSessionUrl)
+                        alert('Link copied!')
+                      }}
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <button 
+                    className={styles.openSessionButton}
+                    onClick={() => window.open(customerSessionUrl, '_blank')}
+                  >
+                    📱 Open Customer Session (New Tab)
+                  </button>
+                  <p className={styles.sessionHint}>
+                    Or go to <strong>Tickets</strong> page to accept the ticket as a human agent.
+                  </p>
+                </div>
+              )}
+              
               {/* Messages */}
               <div 
                 className={styles.messages}
