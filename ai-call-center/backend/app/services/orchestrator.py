@@ -1050,6 +1050,13 @@ class CallOrchestrator:
         
         if result.final_phase == OrchestrationPhase.COMPLETED:
             state.is_completed = True
+        
+        # Detect customer satisfaction and mark as completed
+        if result.primary_output:
+            detected_emotion = result.primary_output.detected_emotion
+            if detected_emotion == EmotionalState.SATISFIED:
+                state.is_completed = True
+                logger.info(f"[Orchestrator] Customer satisfied - marking interaction as completed")
 
     def _create_initial_context(
         self,

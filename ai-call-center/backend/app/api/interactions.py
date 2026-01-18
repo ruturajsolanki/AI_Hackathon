@@ -636,3 +636,222 @@ async def get_interaction_status(
         "current_emotion": state.current_emotion.value if state.current_emotion else None,
         "last_updated": state.last_updated.isoformat(),
     }
+
+
+# -----------------------------------------------------------------------------
+# Summary Generation
+# -----------------------------------------------------------------------------
+
+class CallSummary(BaseModel):
+    """AI-generated call summary for reports."""
+    interaction_id: UUID
+    summary: str = Field(description="Brief summary of the call")
+    customer_issue: str = Field(description="What the customer needed help with")
+    resolution: str = Field(description="How the issue was resolved or current status")
+    key_topics: list[str] = Field(description="Main topics discussed")
+    sentiment_journey: str = Field(description="How customer sentiment evolved")
+    agent_actions: list[str] = Field(description="Key actions taken by the AI agent")
+    recommendations: list[str] = Field(description="Follow-up recommendations if any")
+    duration_seconds: int
+    message_count: int
+    was_escalated: bool
+    final_status: str
+    generated_at: str
+    llm_available: bool = Field(description="Whether LLM was used for summary")
+
+
+@router.get(
+    "/{interaction_id}/summary",
+    response_model=CallSummary,
+    responses={
+        404: {"model": ErrorResponse, "description": "Interaction not found"},
+    },
+)
+async def get_interaction_summary(interaction_id: UUID) -> CallSummary:
+    """
+    Generate an AI-powered summary of the interaction.
+    
+    Uses the configured LLM to analyze the conversation and generate
+    a comprehensive summary suitable for reports and auditing.
+    """
+    from app.persistence import get_store
+    from app.api.config import get_runtime_config, LLMProvider
+    
+    store = get_store()
+    
+    # Get interaction details
+    interaction = await store.get_interaction(str(interaction_id))
+    if not interaction:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Interaction {interaction_id} not found",
+        )
+    
+    # Get messages
+    messages = await store.get_messages(str(interaction_id))
+    
+    # Get agent decisions
+    decisions = await store.get_agent_decisions(str(interaction_id))
+    
+    # Build conversation text for LLM
+    conversation_text = ""
+    for msg in messages:
+        role = "Customer" if msg.get("role") == "customer" else "Agent"
+        content = msg.get("content", "")
+        conversation_text += f"{role}: {content}\n"
+    
+    # Calculate metrics
+    message_count = len(messages)
+    started_at = interaction.get("started_at")
+    ended_at = interaction.get("ended_at") or datetime.now(timezone.utc).isoformat()
+    
+    try:
+        start_dt = datetime.fromisoformat(started_at.replace("Z", "+00:00")) if started_at else datetime.now(timezone.utc)
+        end_dt = datetime.fromisoformat(ended_at.replace("Z", "+00:00")) if isinstance(ended_at, str) else ended_at
+        duration_seconds = int((end_dt - start_dt).total_seconds())
+    except Exception:
+        duration_seconds = 0
+    
+    was_escalated = interaction.get("status") == "escalated"
+    final_status = interaction.get("status", "unknown")
+    
+    # Try to generate summary with LLM
+    config = get_runtime_config()
+    llm_available = config.is_configured()
+    
+    if llm_available and conversation_text.strip():
+        try:
+            summary_data = await _generate_llm_summary(
+                conversation_text, 
+                config.get_provider(),
+                config,
+            )
+            
+            return CallSummary(
+                interaction_id=interaction_id,
+                summary=summary_data.get("summary", "Call completed."),
+                customer_issue=summary_data.get("customer_issue", "Not specified"),
+                resolution=summary_data.get("resolution", "Unknown"),
+                key_topics=summary_data.get("key_topics", []),
+                sentiment_journey=summary_data.get("sentiment_journey", "Stable"),
+                agent_actions=summary_data.get("agent_actions", []),
+                recommendations=summary_data.get("recommendations", []),
+                duration_seconds=duration_seconds,
+                message_count=message_count,
+                was_escalated=was_escalated,
+                final_status=final_status,
+                generated_at=datetime.now(timezone.utc).isoformat(),
+                llm_available=True,
+            )
+        except Exception as e:
+            # Fall back to basic summary
+            pass
+    
+    # Fallback: Generate basic summary without LLM
+    customer_messages = [m for m in messages if m.get("role") == "customer"]
+    first_msg = customer_messages[0].get("content", "") if customer_messages else ""
+    
+    return CallSummary(
+        interaction_id=interaction_id,
+        summary=f"Customer interaction with {message_count} messages.",
+        customer_issue=first_msg[:100] if first_msg else "Not specified",
+        resolution="Resolved by AI" if final_status == "completed" else final_status.title(),
+        key_topics=_extract_topics(messages),
+        sentiment_journey="Started neutral, ended with resolution" if not was_escalated else "Required escalation",
+        agent_actions=["Responded to customer inquiry", "Provided requested information"],
+        recommendations=[],
+        duration_seconds=duration_seconds,
+        message_count=message_count,
+        was_escalated=was_escalated,
+        final_status=final_status,
+        generated_at=datetime.now(timezone.utc).isoformat(),
+        llm_available=False,
+    )
+
+
+def _extract_topics(messages: list) -> list[str]:
+    """Extract key topics from messages (simple keyword-based)."""
+    topics = set()
+    keywords_to_topics = {
+        "order": "Order Status",
+        "tracking": "Shipment Tracking",
+        "refund": "Refund Request",
+        "payment": "Payment Issue",
+        "password": "Account Access",
+        "login": "Account Access",
+        "cancel": "Cancellation",
+        "return": "Returns",
+        "shipping": "Shipping",
+        "billing": "Billing",
+    }
+    
+    for msg in messages:
+        content = msg.get("content", "").lower()
+        for keyword, topic in keywords_to_topics.items():
+            if keyword in content:
+                topics.add(topic)
+    
+    return list(topics)[:5] if topics else ["General Inquiry"]
+
+
+async def _generate_llm_summary(
+    conversation_text: str,
+    provider: "LLMProvider",
+    config: "RuntimeConfig",
+) -> dict:
+    """Generate summary using configured LLM."""
+    from app.api.config import LLMProvider
+    from app.core.llm import CompletionRequest, GenerationConfig, ResponseFormat
+    from app.core.json_utils import extract_json_from_llm_response
+    
+    system_prompt = """You are a call center analyst generating a summary of a customer service interaction.
+
+Analyze the conversation and return a JSON object with:
+{
+    "summary": "2-3 sentence overview of what happened",
+    "customer_issue": "What the customer needed help with",
+    "resolution": "How it was resolved or current status",
+    "key_topics": ["topic1", "topic2"],
+    "sentiment_journey": "How customer sentiment evolved (e.g., 'Started frustrated, ended satisfied')",
+    "agent_actions": ["action1", "action2"],
+    "recommendations": ["any follow-up needed"]
+}
+
+Be concise and professional. Return ONLY valid JSON."""
+
+    user_prompt = f"""Analyze this customer service conversation and generate a summary:
+
+{conversation_text}
+
+Return the JSON summary:"""
+
+    # Get the appropriate client
+    if provider == LLMProvider.OLLAMA:
+        from app.integrations.ollama_client import OllamaClient, OllamaConfig
+        ollama_url = config.get_ollama_url()
+        client = OllamaClient(OllamaConfig(base_url=ollama_url))
+    elif provider == LLMProvider.GEMINI:
+        from app.integrations.gemini_client import GeminiClient, GeminiConfig
+        client = GeminiClient(GeminiConfig(api_key=config.get_api_key()))
+    else:
+        from app.integrations.openai_client import OpenAIClient, OpenAIConfig
+        client = OpenAIClient(OpenAIConfig(api_key=config.get_api_key()))
+    
+    request = CompletionRequest(
+        user_prompt=user_prompt,
+        system_prompt=system_prompt,
+        config=GenerationConfig(
+            temperature=0.3,
+            max_tokens=500,
+            response_format=ResponseFormat.JSON,
+        ),
+    )
+    
+    response = await client.complete(request)
+    
+    if response.content:
+        data = extract_json_from_llm_response(response.content)
+        if data:
+            return data
+    
+    return {}
