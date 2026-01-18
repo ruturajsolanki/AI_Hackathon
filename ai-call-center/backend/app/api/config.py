@@ -17,7 +17,7 @@ from enum import Enum
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 logger = logging.getLogger(__name__)
 
@@ -147,35 +147,40 @@ def get_runtime_config() -> RuntimeConfig:
 # -----------------------------------------------------------------------------
 
 class SetApiKeyRequest(BaseModel):
-    """Request to set the LLM API key."""
+    """Request to set the LLM API key or Ollama URL."""
     
     api_key: str = Field(
         ...,
-        min_length=10,
-        description="The LLM provider API key"
+        min_length=1,  # Allow short values for Ollama URLs
+        description="The LLM provider API key or Ollama URL"
     )
     provider: str = Field(
         default="openai",
-        description="LLM provider name (openai or gemini)"
+        description="LLM provider name (openai, gemini, or ollama)"
     )
-    
-    @field_validator("api_key")
-    @classmethod
-    def validate_key_format(cls, v: str) -> str:
-        """Basic validation of API key format."""
-        v = v.strip()
-        if len(v) < 10:
-            raise ValueError("API key is too short")
-        return v
     
     @field_validator("provider")
     @classmethod
     def validate_provider(cls, v: str) -> str:
         """Validate provider name."""
         v = v.lower().strip()
-        if v not in ["openai", "gemini"]:
-            raise ValueError("Provider must be 'openai' or 'gemini'")
+        if v not in ["openai", "gemini", "ollama"]:
+            raise ValueError("Provider must be 'openai', 'gemini', or 'ollama'")
         return v
+    
+    @model_validator(mode="after")
+    def validate_key_or_url(self) -> "SetApiKeyRequest":
+        """Validate API key format based on provider."""
+        if self.provider == "ollama":
+            # For Ollama, api_key is the URL
+            url = self.api_key.strip()
+            if not url.startswith("http://") and not url.startswith("https://"):
+                raise ValueError("Ollama URL must start with http:// or https://")
+        else:
+            # For API-based providers, validate key length
+            if len(self.api_key.strip()) < 10:
+                raise ValueError("API key is too short")
+        return self
 
 
 class ApiKeyStatusResponse(BaseModel):
@@ -197,7 +202,7 @@ class ApiKeyStatusResponse(BaseModel):
     )
     message: str = Field(description="Human-readable status message")
     available_providers: list[str] = Field(
-        default=["openai", "gemini"],
+        default=["openai", "gemini", "ollama"],
         description="List of supported LLM providers"
     )
 

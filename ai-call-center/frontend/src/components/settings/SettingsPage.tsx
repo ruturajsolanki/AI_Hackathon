@@ -89,8 +89,14 @@ export function SettingsPage() {
   }, [fetchLlmStatus])
 
   const handleSetApiKey = async () => {
-    // For Ollama, no API key is needed
-    if (selectedProvider !== 'ollama') {
+    // For Ollama, validate URL format
+    if (selectedProvider === 'ollama') {
+      const ollamaUrl = apiKeyInput.trim() || 'http://localhost:11434'
+      if (!ollamaUrl.startsWith('http://') && !ollamaUrl.startsWith('https://')) {
+        setKeyError('Ollama URL must start with http:// or https://')
+        return
+      }
+    } else {
       if (!apiKeyInput.trim()) {
         setKeyError('Please enter an API key')
         return
@@ -104,8 +110,10 @@ export function SettingsPage() {
     setIsSettingKey(true)
     setKeyError(null)
 
-    // For Ollama, pass empty string as API key
-    const keyToSet = selectedProvider === 'ollama' ? 'local-ollama' : apiKeyInput.trim()
+    // For Ollama, send the URL as the "api_key" (backend will parse it)
+    const keyToSet = selectedProvider === 'ollama' 
+      ? (apiKeyInput.trim() || 'http://localhost:11434')
+      : apiKeyInput.trim()
     const result = await setLlmApiKey(keyToSet, selectedProvider)
     
     if (result.success) {
@@ -114,10 +122,38 @@ export function SettingsPage() {
       // Auto-validate after setting
       handleValidateKey()
     } else {
-      setKeyError(result.error?.message || 'Failed to set API key')
+      // Handle different error formats safely
+      const errorMsg = getErrorMessage(result.error)
+      setKeyError(errorMsg || 'Failed to set API key')
     }
 
     setIsSettingKey(false)
+  }
+
+  // Helper to safely extract error message from various formats
+  const getErrorMessage = (error: unknown): string => {
+    if (!error) return 'Unknown error'
+    if (typeof error === 'string') return error
+    if (typeof error === 'object') {
+      const err = error as Record<string, unknown>
+      // Handle {message: string} format
+      if (typeof err.message === 'string') return err.message
+      // Handle {detail: string} format
+      if (typeof err.detail === 'string') return err.detail
+      // Handle {detail: [{msg: string}]} format (Pydantic validation)
+      if (Array.isArray(err.detail)) {
+        const messages = err.detail
+          .map((d: unknown) => (d && typeof d === 'object' && 'msg' in d) ? String((d as {msg: string}).msg) : '')
+          .filter(Boolean)
+        return messages.join(', ') || 'Validation failed'
+      }
+      // Handle error array format
+      if (Array.isArray(error)) {
+        return error.map((e: unknown) => typeof e === 'object' && e && 'msg' in e ? String((e as {msg: string}).msg) : String(e)).join(', ')
+      }
+      return JSON.stringify(error)
+    }
+    return String(error)
   }
 
   const handleValidateKey = async () => {
@@ -128,10 +164,12 @@ export function SettingsPage() {
     
     if (result.success && result.data) {
       if (!result.data.valid) {
-        setKeyError(result.data.message)
+        const msg = typeof result.data.message === 'string' ? result.data.message : 'Validation failed'
+        setKeyError(msg)
       }
     } else {
-      setKeyError(result.error?.message || 'Validation failed')
+      const errorMsg = getErrorMessage(result.error)
+      setKeyError(errorMsg || 'Validation failed')
     }
 
     await fetchLlmStatus()
