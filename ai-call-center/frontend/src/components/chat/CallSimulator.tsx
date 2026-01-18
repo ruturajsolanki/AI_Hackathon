@@ -369,7 +369,8 @@ export function CallSimulator() {
           })
           
           setShowEscalationPanel(true)
-          setIsCallActive(false)
+          // Keep isCallActive true so the screen stays visible
+          // setIsCallActive(false) - removed to keep screen visible
           
           if (callId) {
             endCall(callId).catch(console.error)
@@ -507,7 +508,7 @@ export function CallSimulator() {
           })
           
           setShowEscalationPanel(true)
-          setIsCallActive(false)
+          // Keep screen visible - don't close
           
           if (callId) {
             endCall(callId).catch(console.error)
@@ -692,7 +693,7 @@ export function CallSimulator() {
     
     // Mark as escalated FIRST to prevent any new messages
     setIsEscalated(true)
-    setIsCallActive(false) // End the call immediately
+    // Keep isCallActive true so the screen stays visible
     
     // Update agent state
     setAgentState(prev => ({
@@ -881,7 +882,7 @@ export function CallSimulator() {
           })
           
           setShowEscalationPanel(true)
-          setIsCallActive(false)
+          // Keep screen visible - don't close
           
           if (callId) {
             endCall(callId).catch(console.error)
@@ -944,7 +945,8 @@ export function CallSimulator() {
       <div className={styles.content}>
         {/* Main Call Area */}
         <div className={styles.callArea}>
-          {!isCallActive ? (
+          {/* Show start screen only if not active AND not escalated */}
+          {!isCallActive && !isEscalated ? (
             <div className={styles.startScreen}>
               <div className={styles.startIcon}>
                 <Phone size={48} />
@@ -1008,6 +1010,28 @@ export function CallSimulator() {
                   <p className={styles.sessionHint}>
                     Or go to <strong>Tickets</strong> page to accept the ticket as a human agent.
                   </p>
+                  <button 
+                    className={styles.newCallButton}
+                    onClick={() => {
+                      setIsEscalated(false)
+                      setShowEscalationPanel(false)
+                      setIsCallActive(false)
+                      setCustomerSessionUrl(null)
+                      setMessages([])
+                      setAgentState({
+                        status: 'idle',
+                        confidence: 0,
+                        confidenceLevel: 'high',
+                        intent: '',
+                        emotion: '',
+                        shouldEscalate: false,
+                        turnCount: 0,
+                        sessionDuration: 0,
+                      })
+                    }}
+                  >
+                    🔄 Start New Call
+                  </button>
                 </div>
               )}
               
