@@ -335,9 +335,10 @@ class Settings(BaseSettings):
     API_PREFIX: str = "/api"
     API_V1_PREFIX: str = "/api/v1"
     
-    # CORS (for development) - accepts CORS_ORIGINS or ALLOWED_ORIGINS env var
-    ALLOWED_ORIGINS: List[str] = Field(
-        default_factory=list
+    # CORS - stored as comma-separated string to avoid JSON parsing issues
+    CORS_ORIGINS_STR: str = Field(
+        default="http://localhost:3000,http://localhost:5173",
+        validation_alias="CORS_ORIGINS"
     )
     
     # Documentation
@@ -346,32 +347,11 @@ class Settings(BaseSettings):
     # Nested settings (loaded separately)
     # Access via get_* functions for lazy loading
     
-    @field_validator("ALLOWED_ORIGINS", mode="before")
-    @classmethod
-    def parse_origins(cls, v):
-        """Parse comma-separated origins from env."""
-        import os
-        # Check for CORS_ORIGINS first, then ALLOWED_ORIGINS
-        cors_origins = os.environ.get("CORS_ORIGINS", "")
-        allowed_origins = os.environ.get("ALLOWED_ORIGINS", "")
-        
-        # Use whichever is set
-        env_value = cors_origins or allowed_origins
-        
-        if env_value:
-            origins = [o.strip() for o in env_value.split(",") if o.strip()]
-            if origins:
-                return origins
-        
-        # If v is already a list, use it
-        if isinstance(v, list) and v:
-            return v
-            
-        # If v is a string, parse it
-        if isinstance(v, str) and v:
-            return [o.strip() for o in v.split(",") if o.strip()]
-        
-        # Default fallback
+    @property
+    def ALLOWED_ORIGINS(self) -> List[str]:
+        """Parse CORS origins from comma-separated string."""
+        if self.CORS_ORIGINS_STR:
+            return [o.strip() for o in self.CORS_ORIGINS_STR.split(",") if o.strip()]
         return ["http://localhost:3000", "http://localhost:5173"]
     
     @model_validator(mode="after")
