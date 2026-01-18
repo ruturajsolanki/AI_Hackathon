@@ -330,12 +330,20 @@ export function CallSimulator() {
         await speakResponse(data.responseContent)
       }
 
-      // Add escalation notice if needed
-      if (data.shouldEscalate) {
+      // Handle escalation automatically
+      if (data.shouldEscalate && !isEscalated) {
+        // IMMEDIATELY stop everything
+        stopSpeech()
+        stopListening()
+        setContinuousVoiceMode(false)
+        
         addMessage({
           role: 'system',
           content: `⚠️ Escalation triggered: ${data.escalationReason || 'Complex issue detected'}`,
         })
+        
+        // Trigger escalation immediately
+        handleEscalateToHuman()
       }
 
     } else {
@@ -348,7 +356,7 @@ export function CallSimulator() {
         content: `Error: ${result.error?.message || 'Failed to process message'}`,
       })
     }
-  }, [callId, isCallActive, agentState.status, addMessage, speakResponse])
+  }, [callId, isCallActive, agentState.status, isEscalated, addMessage, speakResponse, stopListening, handleEscalateToHuman])
 
   // Send a voice message directly (bypasses input state)
   const sendVoiceMessage = useCallback(async (messageText: string) => {
@@ -432,12 +440,20 @@ export function CallSimulator() {
         }
       }
 
-      // Handle escalation
-      if (data.shouldEscalate) {
+      // Handle escalation automatically
+      if (data.shouldEscalate && !isEscalated) {
+        // IMMEDIATELY stop everything
+        stopSpeech()
+        stopListening()
+        setContinuousVoiceMode(false)
+        
         addMessage({
           role: 'system',
           content: `⚠️ Escalation triggered: ${data.escalationReason || 'Complex issue detected'}`,
         })
+        
+        // Trigger escalation immediately
+        handleEscalateToHuman()
       }
 
     } else {
@@ -448,7 +464,7 @@ export function CallSimulator() {
         content: `Error: ${result.error?.message || 'Failed to process message'}`,
       })
     }
-  }, [callId, addMessage, speakResponse, getConfidenceLevel, getConfidenceScore])
+  }, [callId, isEscalated, addMessage, speakResponse, getConfidenceLevel, getConfidenceScore, stopListening, handleEscalateToHuman])
 
   // Auto-send when speech recognition stops (naturally or by clicking mic)
   useEffect(() => {
