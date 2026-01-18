@@ -537,6 +537,9 @@ class KnowledgeBase:
         """
         Build a context string for LLM prompts based on the query.
         Uses cosine similarity to find the most relevant information.
+        
+        NOTE: The knowledge base contains INTERNAL AGENT PROCEDURES.
+        The LLM should use these as guidance, NOT read them verbatim to customers.
         """
         if not self._loaded:
             self.load()
@@ -546,10 +549,12 @@ class KnowledgeBase:
         # Add relevant solutions (with similarity scores)
         solutions = self.search_solutions(query, limit=2)
         if solutions:
-            context_parts.append("RELEVANT KNOWLEDGE BASE ENTRIES:")
+            context_parts.append("=== INTERNAL AGENT GUIDELINES (DO NOT READ TO CUSTOMER) ===")
+            context_parts.append("Use these procedures as GUIDANCE to help the customer. Generate a NATURAL response.")
+            context_parts.append("")
             for sol in solutions:
-                context_parts.append(f"- Problem: {sol.get('problem', 'N/A')}")
-                context_parts.append(f"  Solution: {sol.get('solution', 'N/A')}")
+                context_parts.append(f"- Issue Type: {sol.get('problem', 'N/A')}")
+                context_parts.append(f"  Agent Steps: {sol.get('solution', 'N/A')}")
                 context_parts.append(f"  Department: {sol.get('department', 'N/A')}")
                 requires_human = sol.get('requires_human', 'false').lower() == 'true'
                 context_parts.append(f"  Requires Human: {'Yes' if requires_human else 'No'}")

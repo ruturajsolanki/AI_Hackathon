@@ -614,6 +614,71 @@ class PrimaryAgent(BaseAgent):
         
         return best_emotion, best_score, factors
 
+    def _convert_procedure_to_response(
+        self,
+        problem: str,
+        solution: str,
+        category: str,
+        subcategory: str,
+    ) -> str:
+        """
+        Convert internal KB procedure steps into a customer-facing response.
+        
+        The KB contains agent procedures (numbered steps), not customer-facing text.
+        This method generates natural conversation based on the first action needed.
+        """
+        problem_lower = problem.lower()
+        
+        # Order-related queries: Ask for order number first
+        if any(word in problem_lower for word in ['order', 'track', 'delivery', 'shipping', 'shipment']):
+            return (
+                "I'd be happy to help you with that! Could you please provide your order number? "
+                "You can find it in your confirmation email or in your account's order history."
+            )
+        
+        # Billing/refund queries: Ask for order/account details
+        if any(word in problem_lower for word in ['refund', 'payment', 'charge', 'invoice', 'bill']):
+            return (
+                "I can help with that! Could you please provide your order number or the last 4 digits of "
+                "the payment method used? This will help me look up your transaction details."
+            )
+        
+        # Account issues: Offer immediate help
+        if any(word in problem_lower for word in ['login', 'password', 'account', 'locked']):
+            return (
+                "I can help you with your account access. Let me send a password reset link to your registered email. "
+                "Could you confirm the email address associated with your account?"
+            )
+        
+        # Subscription cancellation: Acknowledge and offer options
+        if any(word in problem_lower for word in ['cancel', 'subscription', 'unsubscribe']):
+            return (
+                "I understand you're looking to make changes to your subscription. "
+                "Before I process that, would you mind sharing what prompted this? "
+                "I want to make sure I understand your needs and see if there's anything we can do to help."
+            )
+        
+        # Product/technical issues: Ask for details
+        if any(word in problem_lower for word in ['not working', 'error', 'crash', 'bug', 'slow']):
+            return (
+                "I'm sorry to hear you're experiencing issues. To help you better, "
+                "could you describe what's happening? For example, any error messages you're seeing, "
+                "or the steps that lead to the problem?"
+            )
+        
+        # Return/exchange: Ask for order info
+        if any(word in problem_lower for word in ['return', 'exchange', 'damaged', 'wrong item']):
+            return (
+                "I'm sorry for any inconvenience with your order. I'd be happy to help arrange a return or exchange. "
+                "Could you please provide your order number so I can look up the details?"
+            )
+        
+        # Generic fallback: Acknowledge and ask for details
+        return (
+            f"I can help you with that! To provide the best assistance, "
+            f"could you please share a few more details about your situation?"
+        )
+
     def _generate_knowledge_based_response(
         self,
         content: str,
@@ -622,6 +687,9 @@ class PrimaryAgent(BaseAgent):
     ) -> Tuple[str, bool, Optional[str]]:
         """
         Generate response using KNOWLEDGE BASE first, fallback templates second.
+        
+        IMPORTANT: The KB contains internal agent procedures, NOT customer-facing text.
+        We use KB to UNDERSTAND the issue, then generate a CONVERSATIONAL response.
         
         Returns:
             Tuple of (response_text, kb_was_used, source_attribution)
@@ -657,11 +725,10 @@ class PrimaryAgent(BaseAgent):
             if subcategory:
                 source += f" - {subcategory}"
             
-            # Format the solution nicely
+            # Convert procedure to conversational response (NOT raw steps!)
             if solution:
-                # Make it conversational
-                response = f"I can help with that! {solution}"
-                logger.info(f"[KB] Using KB solution! Source: {source}")
+                response = self._convert_procedure_to_response(problem, solution, category, subcategory)
+                logger.info(f"[KB] Generated conversational response from KB. Source: {source}")
                 return emotional_prefix + response, True, source
         
         # SECOND: Try FAQs

@@ -191,17 +191,29 @@ PRIMARY_AGENT_USER_PROMPT_TEMPLATE = """## Customer Message
 {knowledge_context}
 
 ## Task
-Analyze the customer message and generate a response using the knowledge base context above.
+Analyze the customer message and generate a CONVERSATIONAL response.
+
+**CRITICAL**: The Knowledge Base Context contains INTERNAL AGENT PROCEDURES, NOT customer-facing text.
+- These numbered steps are GUIDANCE FOR YOU, not to be read to the customer
+- Use the procedures to understand WHAT to do, then generate a natural response
+- For order inquiries: ASK for the order number first - don't recite lookup steps
+- For billing issues: ASK for relevant details - don't recite verification steps
+- Always respond in NATURAL, CONVERSATIONAL language
+
 Return a JSON object with:
 - intent: The detected intent category
 - emotion: The detected emotional state  
 - confidence: Your confidence score (0.0 to 1.0)
-- response: Your response to the customer (use knowledge base solutions when relevant)
+- response: Your NATURAL, CONVERSATIONAL response to the customer (DO NOT include numbered steps or internal procedures)
 - reasoning: Array of reasoning steps
 - requires_clarification: Whether you need more information
 - suggested_actions: Any follow-up actions needed
 
-Remember: Use the knowledge base solutions and FAQs to provide accurate responses. Do not invent details."""
+Example - If customer asks about order status:
+- BAD response: "1. Get order number from customer. 2. Look up order in system..."
+- GOOD response: "I'd be happy to help you track your order! Could you please provide your order number? You can find it in your confirmation email."
+
+Remember: NEVER read internal procedures to customers. Generate natural, helpful responses."""
 
 
 # -----------------------------------------------------------------------------
