@@ -65,7 +65,7 @@ export function SettingsPage() {
     configuredAt: null,
   })
   const [apiKeyInput, setApiKeyInput] = useState('')
-  const [selectedProvider, setSelectedProvider] = useState<'openai' | 'gemini'>('openai')
+  const [selectedProvider, setSelectedProvider] = useState<'openai' | 'gemini' | 'ollama'>('openai')
   const [isSettingKey, setIsSettingKey] = useState(false)
   const [isValidating, setIsValidating] = useState(false)
   const [keyError, setKeyError] = useState<string | null>(null)
@@ -89,19 +89,24 @@ export function SettingsPage() {
   }, [fetchLlmStatus])
 
   const handleSetApiKey = async () => {
-    if (!apiKeyInput.trim()) {
-      setKeyError('Please enter an API key')
-      return
-    }
-    if (apiKeyInput.length < 10) {
-      setKeyError('API key is too short')
-      return
+    // For Ollama, no API key is needed
+    if (selectedProvider !== 'ollama') {
+      if (!apiKeyInput.trim()) {
+        setKeyError('Please enter an API key')
+        return
+      }
+      if (apiKeyInput.length < 10) {
+        setKeyError('API key is too short')
+        return
+      }
     }
 
     setIsSettingKey(true)
     setKeyError(null)
 
-    const result = await setLlmApiKey(apiKeyInput.trim(), selectedProvider)
+    // For Ollama, pass empty string as API key
+    const keyToSet = selectedProvider === 'ollama' ? 'local-ollama' : apiKeyInput.trim()
+    const result = await setLlmApiKey(keyToSet, selectedProvider)
     
     if (result.success) {
       setApiKeyInput('')
@@ -241,51 +246,75 @@ export function SettingsPage() {
               <div className={styles.settingInfo}>
                 <label className={styles.settingLabel}>LLM Provider</label>
                 <span className={styles.settingHint}>
-                  Select your AI provider - OpenAI (GPT) or Google (Gemini)
+                  Select your AI provider - Cloud APIs or local Ollama
                 </span>
               </div>
               <select
                 className={styles.select}
                 value={selectedProvider}
-                onChange={(e) => setSelectedProvider(e.target.value as 'openai' | 'gemini')}
+                onChange={(e) => setSelectedProvider(e.target.value as 'openai' | 'gemini' | 'ollama')}
                 disabled={isSettingKey}
               >
                 <option value="openai">OpenAI (GPT-4, GPT-4o)</option>
                 <option value="gemini">Google Gemini (Gemini Pro, Flash)</option>
+                <option value="ollama">🏠 Ollama (Local LLM - No API Key)</option>
               </select>
             </div>
 
-            {/* API Key Input */}
-            <div className={styles.settingRow}>
-              <div className={styles.settingInfo}>
-                <label className={styles.settingLabel}>
-                  {selectedProvider === 'gemini' ? 'Gemini API Key' : 'OpenAI API Key'}
-                </label>
-                <span className={styles.settingHint}>
-                  Your API key is stored securely in-memory (never persisted to disk)
-                </span>
+            {/* API Key Input - Only for cloud providers */}
+            {selectedProvider !== 'ollama' ? (
+              <div className={styles.settingRow}>
+                <div className={styles.settingInfo}>
+                  <label className={styles.settingLabel}>
+                    {selectedProvider === 'gemini' ? 'Gemini API Key' : 'OpenAI API Key'}
+                  </label>
+                  <span className={styles.settingHint}>
+                    Your API key is stored securely in-memory (never persisted to disk)
+                  </span>
+                </div>
+                <div className={styles.apiKeyInputGroup}>
+                  <input
+                    type="password"
+                    className={`${styles.input} ${styles.apiKeyInput}`}
+                    placeholder={llmStatus.configured ? '••••••••••••••••' : selectedProvider === 'gemini' ? 'AIza...' : 'sk-...'}
+                    value={apiKeyInput}
+                    onChange={(e) => {
+                      setApiKeyInput(e.target.value)
+                      setKeyError(null)
+                    }}
+                    disabled={isSettingKey}
+                  />
+                  <button
+                    className={styles.setKeyButton}
+                    onClick={handleSetApiKey}
+                    disabled={isSettingKey || !apiKeyInput.trim()}
+                  >
+                    {isSettingKey ? 'Setting...' : llmStatus.configured ? 'Update' : 'Set Key'}
+                  </button>
+                </div>
               </div>
-              <div className={styles.apiKeyInputGroup}>
-                <input
-                  type="password"
-                  className={`${styles.input} ${styles.apiKeyInput}`}
-                  placeholder={llmStatus.configured ? '••••••••••••••••' : selectedProvider === 'gemini' ? 'AIza...' : 'sk-...'}
-                  value={apiKeyInput}
-                  onChange={(e) => {
-                    setApiKeyInput(e.target.value)
-                    setKeyError(null)
-                  }}
-                  disabled={isSettingKey}
-                />
-                <button
-                  className={styles.setKeyButton}
-                  onClick={handleSetApiKey}
-                  disabled={isSettingKey || !apiKeyInput.trim()}
-                >
-                  {isSettingKey ? 'Setting...' : llmStatus.configured ? 'Update' : 'Set Key'}
-                </button>
+            ) : (
+              <div className={styles.settingRow}>
+                <div className={styles.settingInfo}>
+                  <label className={styles.settingLabel}>Local Ollama Setup</label>
+                  <span className={styles.settingHint}>
+                    No API key needed! Runs locally on your machine.
+                  </span>
+                </div>
+                <div className={styles.ollamaInfo}>
+                  <p>1. Install: <a href="https://ollama.ai" target="_blank" rel="noopener noreferrer">ollama.ai</a></p>
+                  <p>2. Run: <code>ollama pull llama3.2</code></p>
+                  <p>3. Start: <code>ollama serve</code></p>
+                  <button
+                    className={styles.setKeyButton}
+                    onClick={handleSetApiKey}
+                    disabled={isSettingKey}
+                  >
+                    {isSettingKey ? 'Connecting...' : 'Connect to Ollama'}
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
             {keyError && (
               <div className={styles.errorMessage}>

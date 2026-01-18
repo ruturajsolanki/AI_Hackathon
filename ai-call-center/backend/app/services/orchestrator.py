@@ -230,9 +230,15 @@ class CallOrchestrator:
             from app.api.config import get_runtime_config, LLMProvider
             runtime_config = get_runtime_config()
             
+            provider = runtime_config.get_provider()
+            
+            # Ollama doesn't need an API key
+            if provider == LLMProvider.OLLAMA:
+                from app.integrations.ollama_client import OllamaClient, OllamaConfig
+                return OllamaClient(OllamaConfig())
+            
             if runtime_config.is_configured():
                 api_key = runtime_config.get_api_key()
-                provider = runtime_config.get_provider()
                 
                 if provider == LLMProvider.GEMINI:
                     from app.integrations.gemini_client import GeminiClient, GeminiConfig

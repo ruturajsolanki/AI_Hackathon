@@ -30,6 +30,7 @@ class LLMProvider(str, Enum):
     """Supported LLM providers."""
     OPENAI = "openai"
     GEMINI = "gemini"
+    OLLAMA = "ollama"  # Local LLM - no API key needed
 
 
 # -----------------------------------------------------------------------------
@@ -408,9 +409,14 @@ async def list_available_models() -> ModelsListResponse:
     """
     List all available models from the configured LLM provider.
     
-    Fetches models dynamically from OpenAI or Gemini API.
+    Fetches models dynamically from OpenAI, Gemini, or local Ollama.
     """
     config = get_runtime_config()
+    provider = config.get_provider()
+    
+    # Ollama doesn't need an API key
+    if provider == LLMProvider.OLLAMA:
+        return await _list_ollama_models()
     
     if not config.is_configured():
         raise HTTPException(
@@ -418,7 +424,6 @@ async def list_available_models() -> ModelsListResponse:
             detail="No API key configured. Set a key first.",
         )
     
-    provider = config.get_provider()
     api_key = config.get_api_key()
     
     try:
@@ -570,3 +575,61 @@ async def _list_openai_models(api_key: str) -> ModelsListResponse:
             models=unique_models[:15],  # Limit to top 15
             default_model="gpt-4o-mini",
         )
+
+
+async def _list_ollama_models() -> ModelsListResponse:
+    """Fetch available models from local Ollama installation."""
+    import httpx
+    
+    url = "http://localhost:11434/api/tags"
+    
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url)
+            
+            if response.status_code != 200:
+                raise Exception(f"Ollama not responding: {response.status_code}")
+            
+            data = response.json()
+            models = []
+            
+            for model in data.get("models", []):
+                model_name = model.get("name", "")
+                size_bytes = model.get("size", 0)
+                
+                # Format size for display
+                size_gb = size_bytes / (1024 ** 3)
+                size_str = f"{size_gb:.1f}GB" if size_gb >= 1 else f"{size_bytes / (1024**2):.0f}MB"
+                
+                models.append(ModelInfo(
+                    id=model_name,
+                    name=model_name,
+                    description=f"Local model - {size_str}",
+                    supports_chat=True,
+                ))
+            
+            if not models:
+                # Return suggestion to install models
+                return ModelsListResponse(
+                    provider="ollama",
+                    models=[
+                        ModelInfo(
+                            id="llama3.2",
+                            name="llama3.2 (not installed)",
+                            description="Run: ollama pull llama3.2",
+                            supports_chat=True,
+                        )
+                    ],
+                    default_model="llama3.2",
+                )
+            
+            return ModelsListResponse(
+                provider="ollama",
+                models=models,
+                default_model=models[0].id if models else "llama3.2",
+            )
+            
+    except httpx.ConnectError:
+        raise Exception("Ollama not running. Start with: ollama serve")
+    except Exception as e:
+        raise Exception(f"Failed to connect to Ollama: {str(e)}")
