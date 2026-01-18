@@ -264,7 +264,56 @@ class EscalationAgent(BaseAgent):
         contributing_factors: List[str] = []
         escalation_history = escalation_history or []
         
-        # Step 0: Check for customer satisfaction signals
+        # Step 0a: Check for casual conversation (greetings, small talk)
+        is_casual = self._is_casual_conversation(
+            original_input,
+            primary_output,
+            reasoning,
+        )
+        
+        if is_casual:
+            # Casual conversation should NEVER escalate
+            reasoning.append("Casual conversation - returning no escalation")
+            return EscalationDecision(
+                interaction_id=primary_output.interaction_id,
+                should_escalate=False,
+                escalation_type=EscalationType.NONE,
+                escalation_reason=None,
+                priority=5,
+                target_agent=None,
+                context_summary="Casual conversation - no issue detected",
+                key_issues=[],
+                attempted_resolutions=[],
+                reasoning=reasoning,
+                contributing_factors=[],
+                recommended_response_time=None,
+            )
+        
+        # Step 0b: Check for EXPLICIT escalation request from customer
+        explicit_escalation = self._detect_explicit_escalation_request(
+            original_input,
+            reasoning,
+        )
+        
+        if explicit_escalation:
+            # Customer EXPLICITLY asked for human - always honor this
+            reasoning.append("Customer explicitly requested human agent - immediate escalation")
+            return EscalationDecision(
+                interaction_id=primary_output.interaction_id,
+                should_escalate=True,
+                escalation_type=EscalationType.HUMAN_IMMEDIATE,
+                escalation_reason=EscalationReason.CUSTOMER_REQUEST,
+                priority=2,
+                target_agent=AgentType.HUMAN,
+                context_summary="Customer explicitly requested to speak with a human agent",
+                key_issues=["Customer requested human assistance"],
+                attempted_resolutions=["AI offered to help but customer preferred human"],
+                reasoning=reasoning,
+                contributing_factors=["Explicit customer request"],
+                recommended_response_time="immediate",
+            )
+        
+        # Step 0c: Check for customer satisfaction signals
         customer_satisfied = self._detect_customer_satisfaction(
             original_input,
             primary_output,
@@ -455,6 +504,97 @@ class EscalationAgent(BaseAgent):
             return True
         
         return False
+    
+    def _is_casual_conversation(
+        self,
+        original_input: AgentInput,
+        primary_output: AgentOutput,
+        reasoning: List[str],
+    ) -> bool:
+        """
+        Detect if this is just casual conversation / greeting that doesn't need escalation.
+        
+        Simple greetings, small talk, and introductions should NEVER escalate.
+        """
+        content_lower = original_input.content.lower()
+        
+        # Greetings and casual phrases - these should NEVER trigger escalation
+        casual_phrases = [
+            # Greetings
+            "hello", "hi", "hey", "good morning", "good afternoon", "good evening",
+            "howdy", "greetings", "hiya", "sup", "what's up", "whats up",
+            # Small talk
+            "how are you", "how's it going", "how are things", "what's new",
+            "how do you do", "nice to meet you", "pleased to meet you",
+            # Introductions
+            "my name is", "i'm ", "i am ", "this is ", "call me ",
+            # Acknowledgments
+            "okay", "ok", "yes", "yeah", "yep", "sure", "alright", "got it",
+            "understood", "i see", "right", "uh huh", "mhm",
+            # Testing
+            "testing", "test", "just testing", "hello there", "anyone there",
+        ]
+        
+        for phrase in casual_phrases:
+            if phrase in content_lower:
+                reasoning.append(f"Casual conversation detected: '{phrase}' - no escalation needed")
+                return True
+        
+        # Check if message is very short (likely just an acknowledgment)
+        word_count = len(content_lower.split())
+        if word_count <= 5 and primary_output.detected_intent == IntentCategory.GENERAL_INQUIRY:
+            # Short general inquiry, likely just greeting or acknowledgment
+            reasoning.append(f"Short message ({word_count} words) with general intent - no escalation needed")
+            return True
+        
+        return False
+
+    def _detect_explicit_escalation_request(
+        self,
+        original_input: AgentInput,
+        reasoning: List[str],
+    ) -> bool:
+        """
+        Detect if customer EXPLICITLY requested to speak with a human.
+        
+        This is different from low confidence - this is when the customer
+        clearly and directly asks for human assistance.
+        """
+        content_lower = original_input.content.lower()
+        
+        # Explicit human request phrases - ONLY these should trigger explicit escalation
+        explicit_human_request_phrases = [
+            # Direct requests
+            "speak to a human", "talk to a human", "speak to a person", "talk to a person",
+            "speak to someone", "talk to someone", "speak with a human", "talk with a human",
+            "speak with a person", "talk with a person", "speak with someone", "talk with someone",
+            "i want a human", "i need a human", "get me a human", "give me a human",
+            "connect me to a human", "transfer me to a human", "put me through to a human",
+            # Manager/supervisor requests
+            "speak to a manager", "talk to a manager", "speak to your manager",
+            "talk to your manager", "speak with a manager", "talk with a manager",
+            "i want a manager", "i need a manager", "get me a manager",
+            "speak to a supervisor", "talk to a supervisor", "speak to your supervisor",
+            "i want a supervisor", "i need a supervisor", "get me a supervisor",
+            # Agent requests
+            "speak to an agent", "talk to an agent", "speak to a real person",
+            "talk to a real person", "connect me to an agent", "transfer to an agent",
+            "i want an agent", "i need an agent", "real agent please",
+            # Operator requests
+            "speak to an operator", "talk to an operator", "operator please",
+            "i need an operator", "get me an operator",
+            # Frustration with AI
+            "you're a bot", "you are a bot", "you're not human", "you are not human",
+            "stop being a robot", "i don't want to talk to a bot", "no more bot",
+            "i don't want ai", "i dont want ai", "stop with the ai",
+        ]
+        
+        for phrase in explicit_human_request_phrases:
+            if phrase in content_lower:
+                reasoning.append(f"Explicit human request detected: '{phrase}'")
+                return True
+        
+        return False
 
     def _check_mandatory_triggers(
         self,
@@ -500,12 +640,15 @@ class EscalationAgent(BaseAgent):
         """Evaluate confidence-based escalation need."""
         adjusted_confidence = review.adjusted_confidence
         
-        if adjusted_confidence < 0.4:
-            reasoning.append(f"Very low confidence ({adjusted_confidence:.2f}) requires escalation")
+        # Only escalate on VERY low confidence (below 0.25) for purely confidence-based reasons
+        # This prevents escalation on simple greetings that might have low confidence
+        if adjusted_confidence < 0.25:
+            reasoning.append(f"Critically low confidence ({adjusted_confidence:.2f}) requires escalation")
             return True, "very_low_confidence"
         
-        if adjusted_confidence < 0.5 and ReviewFlag.ESCALATION_RECOMMENDED in review.flags:
-            reasoning.append("Low confidence with escalation recommendation")
+        # For low confidence (0.25-0.4), only escalate if explicitly flagged
+        if adjusted_confidence < 0.4 and ReviewFlag.ESCALATION_RECOMMENDED in review.flags:
+            reasoning.append("Low confidence with explicit escalation recommendation")
             return True, "low_confidence_flagged"
         
         reasoning.append(f"Confidence level ({adjusted_confidence:.2f}) acceptable")

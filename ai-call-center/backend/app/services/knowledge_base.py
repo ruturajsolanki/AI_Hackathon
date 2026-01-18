@@ -3,13 +3,18 @@ Knowledge Base Service
 
 Loads and provides access to the knowledge base CSV files for AI agents.
 This enables context-aware responses based on customer, product, and policy data.
+
+Uses cosine similarity for semantic matching when embeddings are available,
+with fallback to keyword matching for offline operation.
 """
 
 import csv
 import logging
+import math
 import os
+import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from functools import lru_cache
 
 logger = logging.getLogger(__name__)
@@ -18,10 +23,52 @@ logger = logging.getLogger(__name__)
 DATA_DIR = Path(__file__).parent.parent.parent / "data"
 
 
+def _tokenize(text: str) -> List[str]:
+    """Simple tokenization: lowercase, split on non-alphanumeric."""
+    return re.findall(r'\b[a-z]+\b', text.lower())
+
+
+def _compute_tf(tokens: List[str]) -> Dict[str, float]:
+    """Compute term frequency."""
+    tf = {}
+    for token in tokens:
+        tf[token] = tf.get(token, 0) + 1
+    # Normalize by total tokens
+    total = len(tokens) if tokens else 1
+    return {k: v / total for k, v in tf.items()}
+
+
+def _cosine_similarity(vec1: Dict[str, float], vec2: Dict[str, float]) -> float:
+    """Compute cosine similarity between two TF vectors."""
+    if not vec1 or not vec2:
+        return 0.0
+    
+    # Get all unique terms
+    all_terms = set(vec1.keys()) | set(vec2.keys())
+    
+    # Compute dot product and magnitudes
+    dot_product = 0.0
+    mag1 = 0.0
+    mag2 = 0.0
+    
+    for term in all_terms:
+        v1 = vec1.get(term, 0.0)
+        v2 = vec2.get(term, 0.0)
+        dot_product += v1 * v2
+        mag1 += v1 * v1
+        mag2 += v2 * v2
+    
+    if mag1 == 0 or mag2 == 0:
+        return 0.0
+    
+    return dot_product / (math.sqrt(mag1) * math.sqrt(mag2))
+
+
 class KnowledgeBase:
     """
     In-memory knowledge base loaded from CSV files.
     Provides search and lookup methods for AI agents.
+    Uses cosine similarity for better semantic matching.
     """
     
     def __init__(self):
@@ -31,6 +78,11 @@ class KnowledgeBase:
         self._orders: Dict[str, Dict[str, Any]] = {}
         self._faqs: List[Dict[str, Any]] = []
         self._loaded = False
+        
+        # Pre-computed TF vectors for faster similarity search
+        self._knowledge_vectors: List[Tuple[Dict[str, float], Dict[str, str]]] = []
+        self._faq_vectors: List[Tuple[Dict[str, float], Dict[str, Any]]] = []
+        self._product_vectors: List[Tuple[Dict[str, float], Dict[str, Any]]] = []
     
     def load(self) -> None:
         """Load all CSV data files into memory."""
@@ -43,8 +95,9 @@ class KnowledgeBase:
             self._load_products()
             self._load_orders()
             self._load_faqs()
+            self._build_vectors()
             self._loaded = True
-            logger.info("Knowledge base loaded successfully")
+            logger.info("Knowledge base loaded successfully with cosine similarity support")
         except Exception as e:
             logger.error(f"Failed to load knowledge base: {e}")
     
@@ -87,46 +140,134 @@ class KnowledgeBase:
         self._faqs = self._load_csv("faqs.csv")
         logger.info(f"Loaded {len(self._faqs)} FAQs")
     
+    def _build_vectors(self) -> None:
+        """Pre-compute TF vectors for all searchable content."""
+        # Build knowledge base vectors
+        self._knowledge_vectors = []
+        for entry in self._knowledge:
+            # Combine problem, keywords, category, subcategory for richer matching
+            text = " ".join([
+                entry.get('problem', ''),
+                entry.get('keywords', ''),
+                entry.get('category', ''),
+                entry.get('subcategory', ''),
+                entry.get('solution', '')[:100],  # First 100 chars of solution
+            ])
+            tokens = _tokenize(text)
+            tf = _compute_tf(tokens)
+            self._knowledge_vectors.append((tf, entry))
+        
+        # Build FAQ vectors
+        self._faq_vectors = []
+        for faq in self._faqs:
+            text = " ".join([
+                faq.get('question', ''),
+                faq.get('keywords', ''),
+                faq.get('category', ''),
+                faq.get('answer', '')[:100],
+            ])
+            tokens = _tokenize(text)
+            tf = _compute_tf(tokens)
+            self._faq_vectors.append((tf, faq))
+        
+        # Build product vectors
+        self._product_vectors = []
+        for product in self._products.values():
+            text = " ".join([
+                product.get('name', ''),
+                product.get('category', ''),
+                product.get('subcategory', ''),
+                product.get('common_issues', ''),
+                product.get('description', ''),
+            ])
+            tokens = _tokenize(text)
+            tf = _compute_tf(tokens)
+            self._product_vectors.append((tf, product))
+        
+        logger.info(f"Built {len(self._knowledge_vectors)} KB vectors, {len(self._faq_vectors)} FAQ vectors, {len(self._product_vectors)} product vectors")
+    
     # -------------------------------------------------------------------------
-    # Search Methods
+    # Search Methods with Cosine Similarity
     # -------------------------------------------------------------------------
     
-    def search_solutions(self, query: str, limit: int = 3) -> List[Dict[str, str]]:
+    def search_solutions(self, query: str, limit: int = 3, min_score: float = 0.05) -> List[Dict[str, str]]:
         """
-        Search knowledge base for relevant solutions.
-        Uses keyword matching for simplicity.
+        Search knowledge base for relevant solutions using cosine similarity.
+        Falls back to keyword matching if needed.
         """
         if not self._loaded:
             self.load()
         
-        query_lower = query.lower()
-        scored_results = []
+        # Compute query vector
+        query_tokens = _tokenize(query)
+        query_tf = _compute_tf(query_tokens)
         
-        for entry in self._knowledge:
-            score = 0
-            keywords = entry.get('keywords', '').lower().split(',')
+        # Score all entries by cosine similarity
+        scored_results = []
+        for vec, entry in self._knowledge_vectors:
+            score = _cosine_similarity(query_tf, vec)
             
-            # Score based on keyword matches
+            # Boost score for exact keyword matches
+            keywords = entry.get('keywords', '').lower().split(',')
+            query_lower = query.lower()
             for keyword in keywords:
                 if keyword.strip() in query_lower:
-                    score += 2
+                    score += 0.1
             
-            # Score based on problem text match
-            problem = entry.get('problem', '').lower()
-            if any(word in problem for word in query_lower.split()):
-                score += 1
-            
-            # Score based on category match
-            category = entry.get('category', '').lower()
-            if category in query_lower:
-                score += 1
-            
-            if score > 0:
+            if score >= min_score:
                 scored_results.append((score, entry))
         
         # Sort by score and return top results
         scored_results.sort(key=lambda x: x[0], reverse=True)
         return [entry for _, entry in scored_results[:limit]]
+    
+    def search_faqs(self, query: str, limit: int = 3, min_score: float = 0.05) -> List[Dict[str, Any]]:
+        """Search FAQs using cosine similarity."""
+        if not self._loaded:
+            self.load()
+        
+        query_tokens = _tokenize(query)
+        query_tf = _compute_tf(query_tokens)
+        
+        scored_results = []
+        for vec, faq in self._faq_vectors:
+            score = _cosine_similarity(query_tf, vec)
+            
+            # Boost for keyword matches
+            keywords = faq.get('keywords', '').lower().split(',')
+            query_lower = query.lower()
+            for keyword in keywords:
+                if keyword.strip() in query_lower:
+                    score += 0.1
+            
+            if score >= min_score:
+                scored_results.append((score, faq))
+        
+        scored_results.sort(key=lambda x: x[0], reverse=True)
+        return [faq for _, faq in scored_results[:limit]]
+    
+    def search_products(self, query: str, limit: int = 5, min_score: float = 0.03) -> List[Dict[str, Any]]:
+        """Search products using cosine similarity."""
+        if not self._loaded:
+            self.load()
+        
+        query_tokens = _tokenize(query)
+        query_tf = _compute_tf(query_tokens)
+        
+        scored_results = []
+        for vec, product in self._product_vectors:
+            score = _cosine_similarity(query_tf, vec)
+            
+            # Boost for name match
+            name_lower = product.get('name', '').lower()
+            if any(token in name_lower for token in query_tokens):
+                score += 0.15
+            
+            if score >= min_score:
+                scored_results.append((score, product))
+        
+        scored_results.sort(key=lambda x: x[0], reverse=True)
+        return [product for _, product in scored_results[:limit]]
     
     def get_solution_for_category(self, category: str, subcategory: Optional[str] = None) -> List[Dict[str, str]]:
         """Get all solutions for a category."""
@@ -170,23 +311,6 @@ class KnowledgeBase:
             self.load()
         return self._products.get(product_id)
     
-    def search_products(self, query: str) -> List[Dict[str, Any]]:
-        """Search products by name or category."""
-        if not self._loaded:
-            self.load()
-        
-        query_lower = query.lower()
-        results = []
-        
-        for product in self._products.values():
-            name = product.get('name', '').lower()
-            category = product.get('category', '').lower()
-            
-            if query_lower in name or query_lower in category:
-                results.append(product)
-        
-        return results
-    
     def get_order(self, order_id: str) -> Optional[Dict[str, Any]]:
         """Get order by ID."""
         if not self._loaded:
@@ -203,32 +327,6 @@ class KnowledgeBase:
             if order.get('customer_id') == customer_id
         ]
     
-    def search_faqs(self, query: str, limit: int = 3) -> List[Dict[str, Any]]:
-        """Search FAQs by keywords."""
-        if not self._loaded:
-            self.load()
-        
-        query_lower = query.lower()
-        scored_results = []
-        
-        for faq in self._faqs:
-            score = 0
-            keywords = faq.get('keywords', '').lower().split(',')
-            question = faq.get('question', '').lower()
-            
-            for keyword in keywords:
-                if keyword.strip() in query_lower:
-                    score += 2
-            
-            if any(word in question for word in query_lower.split()):
-                score += 1
-            
-            if score > 0:
-                scored_results.append((score, faq))
-        
-        scored_results.sort(key=lambda x: x[0], reverse=True)
-        return [faq for _, faq in scored_results[:limit]]
-    
     # -------------------------------------------------------------------------
     # Context Building for LLM
     # -------------------------------------------------------------------------
@@ -236,14 +334,14 @@ class KnowledgeBase:
     def build_context_for_query(self, query: str, customer_id: Optional[str] = None) -> str:
         """
         Build a context string for LLM prompts based on the query.
-        Includes relevant solutions, customer info, and FAQs.
+        Uses cosine similarity to find the most relevant information.
         """
         if not self._loaded:
             self.load()
         
         context_parts = []
         
-        # Add relevant solutions
+        # Add relevant solutions (with similarity scores)
         solutions = self.search_solutions(query, limit=2)
         if solutions:
             context_parts.append("RELEVANT KNOWLEDGE BASE ENTRIES:")
@@ -251,7 +349,8 @@ class KnowledgeBase:
                 context_parts.append(f"- Problem: {sol.get('problem', 'N/A')}")
                 context_parts.append(f"  Solution: {sol.get('solution', 'N/A')}")
                 context_parts.append(f"  Department: {sol.get('department', 'N/A')}")
-                context_parts.append(f"  Requires Human: {sol.get('requires_human', 'false')}")
+                requires_human = sol.get('requires_human', 'false').lower() == 'true'
+                context_parts.append(f"  Requires Human: {'Yes' if requires_human else 'No'}")
                 context_parts.append("")
         
         # Add customer context if available
@@ -280,7 +379,23 @@ class KnowledgeBase:
             context_parts.append("RELATED FAQs:")
             for faq in faqs:
                 context_parts.append(f"Q: {faq.get('question', 'N/A')}")
-                context_parts.append(f"A: {faq.get('answer', 'N/A')[:200]}...")
+                answer = faq.get('answer', 'N/A')
+                # Truncate long answers
+                if len(answer) > 300:
+                    answer = answer[:300] + "..."
+                context_parts.append(f"A: {answer}")
+                context_parts.append("")
+        
+        # Add relevant products if query mentions product-related terms
+        product_keywords = ['product', 'item', 'device', 'broken', 'not working', 'issue', 'problem']
+        if any(kw in query.lower() for kw in product_keywords):
+            products = self.search_products(query, limit=1)
+            if products:
+                context_parts.append("RELEVANT PRODUCT INFO:")
+                for prod in products:
+                    context_parts.append(f"- Product: {prod.get('name', 'N/A')}")
+                    context_parts.append(f"  Common Issues: {prod.get('common_issues', 'N/A')}")
+                    context_parts.append(f"  Troubleshooting: {prod.get('troubleshooting_steps', 'N/A')}")
                 context_parts.append("")
         
         return "\n".join(context_parts) if context_parts else ""

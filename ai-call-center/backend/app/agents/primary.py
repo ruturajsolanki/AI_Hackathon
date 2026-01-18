@@ -497,6 +497,22 @@ class PrimaryAgent(BaseAgent):
         """Detect intent using keyword matching."""
         content_lower = content.lower()
         
+        # FIRST: Check for greetings - these should get HIGH confidence
+        greeting_phrases = [
+            "hello", "hi", "hey", "good morning", "good afternoon", "good evening",
+            "howdy", "greetings", "hiya", "what's up", "whats up", "how are you",
+            "nice to meet", "my name is", "i'm ", "testing", "test",
+        ]
+        for phrase in greeting_phrases:
+            if phrase in content_lower:
+                return IntentCategory.GENERAL_INQUIRY, 0.95, [f"Greeting detected: '{phrase}'"]
+        
+        # Check if message is very short (likely just acknowledgment/greeting)
+        word_count = len(content_lower.split())
+        if word_count <= 4:
+            # Very short message, likely casual
+            return IntentCategory.GENERAL_INQUIRY, 0.85, ["Short message, treating as general inquiry"]
+        
         best_intent = IntentCategory.UNKNOWN
         best_score = 0.0
         best_matches: List[str] = []
@@ -515,8 +531,10 @@ class PrimaryAgent(BaseAgent):
             factors.append(f"Keywords matched: {', '.join(best_matches[:3])}")
         
         if best_intent == IntentCategory.UNKNOWN:
-            best_score = 0.3
-            factors.append("No strong intent indicators found")
+            # Unknown intent but not a problem - just a general inquiry
+            best_intent = IntentCategory.GENERAL_INQUIRY
+            best_score = 0.6  # Raised from 0.3 to prevent low-confidence escalation
+            factors.append("No specific intent indicators, treating as general inquiry")
         
         return best_intent, best_score, factors
 
