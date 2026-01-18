@@ -377,3 +377,196 @@ async def clear_llm_key() -> None:
     """
     config = get_runtime_config()
     config.clear_api_key()
+
+
+# -----------------------------------------------------------------------------
+# Model Listing
+# -----------------------------------------------------------------------------
+
+class ModelInfo(BaseModel):
+    """Information about an available model."""
+    id: str = Field(description="Model identifier to use in API calls")
+    name: str = Field(description="Human-readable model name")
+    description: str = Field(default="", description="Model description")
+    supports_chat: bool = Field(default=True, description="Whether model supports chat/generateContent")
+
+
+class ModelsListResponse(BaseModel):
+    """Response with list of available models."""
+    provider: str
+    models: list[ModelInfo]
+    default_model: str
+
+
+@router.get(
+    "/llm/models",
+    response_model=ModelsListResponse,
+    summary="List Available Models",
+    description="Fetch available models from the configured LLM provider.",
+)
+async def list_available_models() -> ModelsListResponse:
+    """
+    List all available models from the configured LLM provider.
+    
+    Fetches models dynamically from OpenAI or Gemini API.
+    """
+    config = get_runtime_config()
+    
+    if not config.is_configured():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No API key configured. Set a key first.",
+        )
+    
+    provider = config.get_provider()
+    api_key = config.get_api_key()
+    
+    try:
+        if provider == LLMProvider.GEMINI:
+            return await _list_gemini_models(api_key)
+        else:
+            return await _list_openai_models(api_key)
+    except Exception as e:
+        logger.error(f"Failed to list models: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch models: {str(e)}",
+        )
+
+
+async def _list_gemini_models(api_key: str) -> ModelsListResponse:
+    """Fetch available models from Gemini API."""
+    import httpx
+    
+    url = "https://generativelanguage.googleapis.com/v1beta/models"
+    params = {"key": api_key}
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(url, params=params)
+        
+        if response.status_code != 200:
+            raise Exception(f"Gemini API error: {response.status_code}")
+        
+        data = response.json()
+        models = []
+        
+        for model in data.get("models", []):
+            model_name = model.get("name", "")
+            # Filter to only show models that support generateContent
+            supported_methods = model.get("supportedGenerationMethods", [])
+            if "generateContent" not in supported_methods:
+                continue
+            
+            # Extract just the model ID (e.g., "gemini-2.0-flash" from "models/gemini-2.0-flash")
+            model_id = model_name.replace("models/", "")
+            
+            # Skip embedding models and other non-chat models
+            if "embedding" in model_id.lower() or "aqa" in model_id.lower():
+                continue
+            
+            models.append(ModelInfo(
+                id=model_id,
+                name=model.get("displayName", model_id),
+                description=model.get("description", "")[:100] if model.get("description") else "",
+                supports_chat=True,
+            ))
+        
+        # Sort by name, putting newer versions first
+        models.sort(key=lambda m: (
+            "2.5" not in m.id,  # 2.5 first
+            "2.0" not in m.id,  # then 2.0
+            "1.5" not in m.id,  # then 1.5
+            "flash" not in m.id.lower(),  # flash before pro
+            m.id
+        ))
+        
+        return ModelsListResponse(
+            provider="gemini",
+            models=models[:15],  # Limit to top 15
+            default_model="gemini-2.0-flash",
+        )
+
+
+async def _list_openai_models(api_key: str) -> ModelsListResponse:
+    """Fetch available models from OpenAI API."""
+    import httpx
+    
+    url = "https://api.openai.com/v1/models"
+    headers = {"Authorization": f"Bearer {api_key}"}
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(url, headers=headers)
+        
+        if response.status_code != 200:
+            raise Exception(f"OpenAI API error: {response.status_code}")
+        
+        data = response.json()
+        models = []
+        
+        # Filter to only chat models
+        chat_model_prefixes = ["gpt-4", "gpt-3.5", "o1", "o3"]
+        
+        for model in data.get("data", []):
+            model_id = model.get("id", "")
+            
+            # Only include chat-capable models
+            if not any(model_id.startswith(prefix) for prefix in chat_model_prefixes):
+                continue
+            
+            # Skip fine-tuned, instruct variants, vision-only, etc.
+            if any(x in model_id for x in ["-instruct", "vision-preview", "realtime", "audio"]):
+                continue
+            
+            # Create friendly name
+            name = model_id
+            if "gpt-4o-mini" in model_id:
+                name = "GPT-4o Mini (Fast & Affordable)"
+            elif "gpt-4o" in model_id and "mini" not in model_id:
+                name = "GPT-4o (Most Capable)"
+            elif "gpt-4-turbo" in model_id:
+                name = "GPT-4 Turbo"
+            elif "gpt-4" in model_id:
+                name = "GPT-4"
+            elif "gpt-3.5-turbo" in model_id:
+                name = "GPT-3.5 Turbo"
+            elif "o1" in model_id:
+                name = f"O1 ({model_id})"
+            elif "o3" in model_id:
+                name = f"O3 ({model_id})"
+            
+            models.append(ModelInfo(
+                id=model_id,
+                name=name,
+                description="",
+                supports_chat=True,
+            ))
+        
+        # Sort by capability (gpt-4o first, then gpt-4, then gpt-3.5)
+        def model_sort_key(m):
+            if "gpt-4o-mini" in m.id:
+                return (1, m.id)
+            if "gpt-4o" in m.id:
+                return (0, m.id)
+            if "gpt-4-turbo" in m.id:
+                return (2, m.id)
+            if "gpt-4" in m.id:
+                return (3, m.id)
+            if "o1" in m.id or "o3" in m.id:
+                return (4, m.id)
+            return (5, m.id)
+        
+        models.sort(key=model_sort_key)
+        
+        # Remove duplicates (keep first occurrence)
+        seen = set()
+        unique_models = []
+        for m in models:
+            if m.id not in seen:
+                seen.add(m.id)
+                unique_models.append(m)
+        
+        return ModelsListResponse(
+            provider="openai",
+            models=unique_models[:15],  # Limit to top 15
+            default_model="gpt-4o-mini",
+        )

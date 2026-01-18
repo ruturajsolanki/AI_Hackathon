@@ -38,20 +38,12 @@ interface TestResult {
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
-// Model options per provider
-const OPENAI_MODELS = [
-  { value: 'gpt-4o', label: 'GPT-4o (Most Capable)' },
-  { value: 'gpt-4o-mini', label: 'GPT-4o Mini (Fast)' },
-  { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
-  { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
-]
-
-const GEMINI_MODELS = [
-  { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash (Recommended)' },
-  { value: 'gemini-1.5-flash-latest', label: 'Gemini 1.5 Flash' },
-  { value: 'gemini-1.5-pro-latest', label: 'Gemini 1.5 Pro (Most Capable)' },
-  { value: 'gemini-pro', label: 'Gemini Pro (Legacy)' },
-]
+interface AvailableModel {
+  id: string
+  name: string
+  description: string
+  supportsChat: boolean
+}
 
 export function AgentProgrammingPage() {
   const [agents, setAgents] = useState<AgentConfig[]>([])
@@ -65,30 +57,54 @@ export function AgentProgrammingPage() {
   const [hasChanges, setHasChanges] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [currentProvider, setCurrentProvider] = useState<'openai' | 'gemini'>('openai')
+  const [availableModels, setAvailableModels] = useState<AvailableModel[]>([])
+  const [defaultModel, setDefaultModel] = useState('gpt-4o-mini')
+  const [isLoadingModels, setIsLoadingModels] = useState(false)
 
-  // Fetch current LLM provider
+  // Fetch current LLM provider and available models
   useEffect(() => {
-    const fetchProvider = async () => {
+    const fetchProviderAndModels = async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/config/llm/status`)
-        if (response.ok) {
-          const data = await response.json()
-          if (data.provider === 'gemini') {
+        // First get provider status
+        const statusResponse = await fetch(`${API_BASE}/api/config/llm/status`)
+        if (statusResponse.ok) {
+          const statusData = await statusResponse.json()
+          if (statusData.provider === 'gemini') {
             setCurrentProvider('gemini')
           } else {
             setCurrentProvider('openai')
+          }
+          
+          // If configured, fetch available models
+          if (statusData.configured) {
+            setIsLoadingModels(true)
+            try {
+              const modelsResponse = await fetch(`${API_BASE}/api/config/llm/models`)
+              if (modelsResponse.ok) {
+                const modelsData = await modelsResponse.json()
+                // Transform snake_case to camelCase
+                const models: AvailableModel[] = modelsData.models.map((m: Record<string, unknown>) => ({
+                  id: m.id as string,
+                  name: m.name as string,
+                  description: m.description as string || '',
+                  supportsChat: m.supports_chat as boolean ?? true,
+                }))
+                setAvailableModels(models)
+                setDefaultModel(modelsData.default_model || models[0]?.id || 'gpt-4o-mini')
+              }
+            } catch {
+              // Keep empty models list
+            } finally {
+              setIsLoadingModels(false)
+            }
           }
         }
       } catch {
         // Default to OpenAI
       }
     }
-    fetchProvider()
+    fetchProviderAndModels()
   }, [])
-
-  // Get models based on current provider
-  const availableModels = currentProvider === 'gemini' ? GEMINI_MODELS : OPENAI_MODELS
-  const defaultModel = currentProvider === 'gemini' ? 'gemini-2.0-flash' : 'gpt-4o-mini'
 
   const fetchAgents = useCallback(async () => {
     setIsLoading(true)
@@ -429,15 +445,33 @@ export function AgentProgrammingPage() {
                 <div className={styles.sectionBody}>
                   <div className={styles.formGrid}>
                     <div className={styles.formField}>
-                      <label>Model ({currentProvider === 'gemini' ? 'Google Gemini' : 'OpenAI'})</label>
+                      <label>
+                        Model ({currentProvider === 'gemini' ? 'Google Gemini' : 'OpenAI'})
+                        {isLoadingModels && <span style={{ marginLeft: 8, opacity: 0.6 }}>Loading...</span>}
+                      </label>
                       <select
                         value={editedConfig.model || defaultModel}
                         onChange={(e) => handleConfigChange('model', e.target.value)}
+                        disabled={isLoadingModels}
                       >
-                        {availableModels.map(m => (
-                          <option key={m.value} value={m.value}>{m.label}</option>
-                        ))}
+                        {availableModels.length > 0 ? (
+                          availableModels.map(m => (
+                            <option key={m.id} value={m.id} title={m.description}>
+                              {m.name}
+                            </option>
+                          ))
+                        ) : (
+                          <>
+                            <option value="gpt-4o-mini">GPT-4o Mini (Default)</option>
+                            <option value="gemini-2.0-flash">Gemini 2.0 Flash (Default)</option>
+                          </>
+                        )}
                       </select>
+                      {availableModels.length > 0 && (
+                        <span className={styles.fieldHint}>
+                          {availableModels.length} models available from your API key
+                        </span>
+                      )}
                     </div>
 
                     <div className={styles.formField}>
