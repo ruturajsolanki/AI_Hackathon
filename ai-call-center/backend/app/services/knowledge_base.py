@@ -533,6 +533,21 @@ class KnowledgeBase:
     # Context Building for LLM
     # -------------------------------------------------------------------------
     
+    def _extract_order_id(self, query: str) -> Optional[str]:
+        """Extract order ID from query if present (e.g., ORD10024)."""
+        import re
+        # Match patterns like ORD10024, ord-10024, ORDER10024, order_10024, etc.
+        match = re.search(r'\b(ORD|ord|order|ORDER)[-_]?(\d{4,})\b', query, re.IGNORECASE)
+        if match:
+            return f"ORD{match.group(2)}"
+        # Also try just standalone numbers that look like order IDs
+        match = re.search(r'\b(\d{5,})\b', query)
+        if match:
+            potential_id = f"ORD{match.group(1)}"
+            if potential_id in self._orders:
+                return potential_id
+        return None
+
     def build_context_for_query(self, query: str, customer_id: Optional[str] = None) -> str:
         """
         Build a context string for LLM prompts based on the query.
@@ -545,6 +560,38 @@ class KnowledgeBase:
             self.load()
         
         context_parts = []
+        
+        # FIRST: Check if customer provided an order ID - if so, look it up directly!
+        order_id = self._extract_order_id(query)
+        if order_id:
+            order = self.get_order(order_id)
+            if order:
+                context_parts.append("=== ACTUAL ORDER DATA (Use this to answer the customer!) ===")
+                context_parts.append(f"Order ID: {order.get('order_id', 'N/A')}")
+                context_parts.append(f"Status: {order.get('status', 'Unknown').upper()}")
+                context_parts.append(f"Order Date: {order.get('order_date', 'N/A')}")
+                context_parts.append(f"Total: ${order.get('total', 'N/A')}")
+                context_parts.append(f"Shipping Method: {order.get('shipping_method', 'Standard')}")
+                tracking = order.get('tracking_number', '')
+                if tracking:
+                    context_parts.append(f"Tracking Number: {tracking}")
+                est_delivery = order.get('estimated_delivery', '')
+                if est_delivery:
+                    context_parts.append(f"Estimated Delivery: {est_delivery}")
+                actual_delivery = order.get('actual_delivery', '')
+                if actual_delivery:
+                    context_parts.append(f"Delivered On: {actual_delivery}")
+                notes = order.get('notes', '')
+                if notes:
+                    context_parts.append(f"Notes: {notes}")
+                context_parts.append("")
+                context_parts.append("INSTRUCTION: Tell the customer their order status using the data above!")
+                context_parts.append("")
+            else:
+                context_parts.append(f"=== ORDER NOT FOUND ===")
+                context_parts.append(f"Order ID '{order_id}' was not found in the system.")
+                context_parts.append("Politely ask the customer to verify the order number.")
+                context_parts.append("")
         
         # Add relevant solutions (with similarity scores)
         solutions = self.search_solutions(query, limit=2)

@@ -545,11 +545,44 @@ class SupervisorAgent(BaseAgent):
             logger.error(f"Supervisor LLM evaluation failed: {e}")
             return self._fallback_evaluation(primary_output, original_input)
 
+    def _normalize_string_list(self, items: List[Any]) -> List[str]:
+        """
+        Normalize a list to ensure all items are strings.
+        
+        Ollama sometimes returns nested objects like:
+        {"step": "quality_assessment", "details": "..."}
+        
+        This extracts text from such structures.
+        """
+        result = []
+        for item in items:
+            if isinstance(item, str):
+                result.append(item)
+            elif isinstance(item, dict):
+                # Extract meaningful text from dict
+                if 'details' in item:
+                    result.append(str(item['details']))
+                elif 'description' in item:
+                    result.append(str(item['description']))
+                elif 'step' in item and 'details' in item:
+                    result.append(f"{item['step']}: {item['details']}")
+                elif 'type' in item and 'suggestion' in item:
+                    result.append(str(item['suggestion']))
+                else:
+                    # Fallback: join all values
+                    values = [str(v) for v in item.values() if v]
+                    if values:
+                        result.append(" - ".join(values))
+            else:
+                result.append(str(item))
+        return result
+
     def _parse_llm_review(self, content: str) -> Optional[Dict[str, Any]]:
         """
         Safely parse LLM JSON output.
         
         Returns None if parsing fails - triggers fallback.
+        Handles Ollama returning nested objects instead of strings.
         """
         try:
             # Use robust JSON extraction utility
@@ -557,6 +590,15 @@ class SupervisorAgent(BaseAgent):
             if data is None:
                 logger.warning(f"JSON parse error in supervisor: Could not extract JSON from LLM response")
                 return None
+            
+            # Pre-process data to handle Ollama's nested object responses
+            if 'recommendations' in data and isinstance(data['recommendations'], list):
+                data['recommendations'] = self._normalize_string_list(data['recommendations'])
+            if 'reasoning' in data and isinstance(data['reasoning'], list):
+                data['reasoning'] = self._normalize_string_list(data['reasoning'])
+            if 'flags' in data and isinstance(data['flags'], list):
+                data['flags'] = self._normalize_string_list(data['flags'])
+            
             result = LLMReviewResult.model_validate(data)
             
             return {
