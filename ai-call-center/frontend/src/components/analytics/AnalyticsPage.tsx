@@ -158,9 +158,15 @@ export function AnalyticsPage() {
         <div className={styles.chartCard}>
           <h3 className={styles.chartTitle}>Call Volume Trend</h3>
           <div className={styles.chartArea}>
-            {trends?.dailyTrends.map((day, i) => (
-              <BarGroup key={i} day={day} maxCalls={Math.max(...trends.dailyTrends.map(d => d.totalCalls))} />
-            ))}
+            {trends?.dailyTrends && trends.dailyTrends.length > 0 ? (
+              trends.dailyTrends.map((day, i) => (
+                <BarGroup key={i} day={day} maxCalls={Math.max(...trends.dailyTrends.map(d => d.totalCalls))} />
+              ))
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', color: 'rgba(255,255,255,0.4)' }}>
+                No trend data available
+              </div>
+            )}
           </div>
         </div>
 
