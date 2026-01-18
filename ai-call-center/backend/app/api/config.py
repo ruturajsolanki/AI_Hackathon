@@ -262,7 +262,13 @@ async def set_llm_api_key(request: SetApiKeyRequest) -> SetApiKeyResponse:
     config = get_runtime_config()
     
     try:
-        provider = LLMProvider.GEMINI if request.provider == "gemini" else LLMProvider.OPENAI
+        # Map provider string to enum
+        provider_map = {
+            "openai": LLMProvider.OPENAI,
+            "gemini": LLMProvider.GEMINI,
+            "ollama": LLMProvider.OLLAMA,
+        }
+        provider = provider_map.get(request.provider.lower(), LLMProvider.OPENAI)
         config.set_api_key(request.api_key, provider)
         
         return SetApiKeyResponse(
@@ -300,13 +306,22 @@ async def get_llm_status() -> ApiKeyStatusResponse:
     provider = config.get_provider().value
     
     if not is_configured:
-        message = "No API key configured. Add your OpenAI or Gemini API key to enable AI features."
+        message = "No API key configured. Add your OpenAI, Gemini API key, or connect to Ollama."
     elif is_valid is None:
-        message = f"API key configured for {provider} but not yet validated. Send a test message to validate."
+        if provider == "ollama":
+            message = f"Ollama configured. Send a test message to validate connection."
+        else:
+            message = f"API key configured for {provider} but not yet validated. Send a test message to validate."
     elif is_valid:
-        message = f"API key for {provider} configured and validated successfully."
+        if provider == "ollama":
+            message = f"Connected to Ollama server successfully."
+        else:
+            message = f"API key for {provider} configured and validated successfully."
     else:
-        message = f"API key for {provider} configured but validation failed. Please check your key."
+        if provider == "ollama":
+            message = f"Ollama connection failed. Check if the server is running."
+        else:
+            message = f"API key for {provider} configured but validation failed. Please check your key."
     
     return ApiKeyStatusResponse(
         configured=is_configured,
@@ -315,7 +330,7 @@ async def get_llm_status() -> ApiKeyStatusResponse:
         validated=is_valid,
         last_validated_at=last_validated.isoformat() if last_validated else None,
         message=message,
-        available_providers=["openai", "gemini"],
+        available_providers=["openai", "gemini", "ollama"],
     )
 
 
@@ -342,7 +357,14 @@ async def validate_llm_key() -> ValidationResponse:
     provider = config.get_provider()
     
     try:
-        if provider == LLMProvider.GEMINI:
+        if provider == LLMProvider.OLLAMA:
+            # Use Ollama client
+            from app.integrations.ollama_client import OllamaClient, OllamaConfig
+            
+            ollama_url = config.get_ollama_url()
+            client_config = OllamaConfig(base_url=ollama_url)
+            client = OllamaClient(client_config)
+        elif provider == LLMProvider.GEMINI:
             # Use Gemini client
             from app.integrations.gemini_client import GeminiClient, GeminiConfig
             
