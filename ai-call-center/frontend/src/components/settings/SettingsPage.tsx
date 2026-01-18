@@ -65,6 +65,7 @@ export function SettingsPage() {
     configuredAt: null,
   })
   const [apiKeyInput, setApiKeyInput] = useState('')
+  const [selectedProvider, setSelectedProvider] = useState<'openai' | 'gemini'>('openai')
   const [isSettingKey, setIsSettingKey] = useState(false)
   const [isValidating, setIsValidating] = useState(false)
   const [keyError, setKeyError] = useState<string | null>(null)
@@ -100,7 +101,7 @@ export function SettingsPage() {
     setIsSettingKey(true)
     setKeyError(null)
 
-    const result = await setLlmApiKey(apiKeyInput.trim())
+    const result = await setLlmApiKey(apiKeyInput.trim(), selectedProvider)
     
     if (result.success) {
       setApiKeyInput('')
@@ -235,10 +236,31 @@ export function SettingsPage() {
           </div>
 
           <div className={styles.settingsGroup}>
+            {/* Provider Selection */}
+            <div className={styles.settingRow}>
+              <div className={styles.settingInfo}>
+                <label className={styles.settingLabel}>LLM Provider</label>
+                <span className={styles.settingHint}>
+                  Select your AI provider - OpenAI (GPT) or Google (Gemini)
+                </span>
+              </div>
+              <select
+                className={styles.select}
+                value={selectedProvider}
+                onChange={(e) => setSelectedProvider(e.target.value as 'openai' | 'gemini')}
+                disabled={isSettingKey}
+              >
+                <option value="openai">OpenAI (GPT-4, GPT-4o)</option>
+                <option value="gemini">Google Gemini (Gemini Pro, Flash)</option>
+              </select>
+            </div>
+
             {/* API Key Input */}
             <div className={styles.settingRow}>
               <div className={styles.settingInfo}>
-                <label className={styles.settingLabel}>OpenAI API Key</label>
+                <label className={styles.settingLabel}>
+                  {selectedProvider === 'gemini' ? 'Gemini API Key' : 'OpenAI API Key'}
+                </label>
                 <span className={styles.settingHint}>
                   Your API key is stored securely in-memory (never persisted to disk)
                 </span>
@@ -247,7 +269,7 @@ export function SettingsPage() {
                 <input
                   type="password"
                   className={`${styles.input} ${styles.apiKeyInput}`}
-                  placeholder={llmStatus.configured ? '••••••••••••••••' : 'sk-...'}
+                  placeholder={llmStatus.configured ? '••••••••••••••••' : selectedProvider === 'gemini' ? 'AIza...' : 'sk-...'}
                   value={apiKeyInput}
                   onChange={(e) => {
                     setApiKeyInput(e.target.value)
@@ -278,7 +300,7 @@ export function SettingsPage() {
                   <div className={styles.settingInfo}>
                     <label className={styles.settingLabel}>Status</label>
                     <span className={styles.settingHint}>
-                      Connection status to OpenAI API
+                      Connection status to {llmStatus.provider === 'gemini' ? 'Google Gemini' : 'OpenAI'} API
                     </span>
                   </div>
                   <div className={styles.statusValue}>
@@ -314,7 +336,7 @@ export function SettingsPage() {
                     </span>
                   </div>
                   <span className={styles.readOnlyValue}>
-                    {llmStatus.provider === 'openai' ? 'OpenAI (GPT-4)' : llmStatus.provider}
+                    {llmStatus.provider === 'gemini' ? 'Google Gemini' : 'OpenAI (GPT-4)'}
                   </span>
                 </div>
 

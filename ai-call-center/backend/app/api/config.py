@@ -13,12 +13,24 @@ Security Notes:
 import hashlib
 import logging
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
+
+
+# -----------------------------------------------------------------------------
+# Provider Enum
+# -----------------------------------------------------------------------------
+
+class LLMProvider(str, Enum):
+    """Supported LLM providers."""
+    OPENAI = "openai"
+    GEMINI = "gemini"
+
 
 # -----------------------------------------------------------------------------
 # In-Memory Configuration Store
@@ -42,41 +54,47 @@ class RuntimeConfig:
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance._openai_key: Optional[str] = None
+            cls._instance._api_key: Optional[str] = None
+            cls._instance._provider: LLMProvider = LLMProvider.OPENAI
             cls._instance._key_configured_at: Optional[datetime] = None
             cls._instance._last_validation: Optional[datetime] = None
             cls._instance._is_valid: Optional[bool] = None
         return cls._instance
     
-    def set_openai_key(self, key: str) -> None:
+    def set_api_key(self, key: str, provider: LLMProvider = LLMProvider.OPENAI) -> None:
         """
-        Set the OpenAI API key.
+        Set the LLM API key.
         
         The key is stored in-memory only.
         A hash is logged for audit purposes (never the actual key).
         """
-        self._openai_key = key
+        self._api_key = key
+        self._provider = provider
         self._key_configured_at = datetime.now(timezone.utc)
         self._is_valid = None  # Reset validation status
         
         # Log key configuration (hash only, never the key)
         key_hash = hashlib.sha256(key.encode()).hexdigest()[:8]
-        logger.info(f"LLM API key configured (hash prefix: {key_hash}...)")
+        logger.info(f"LLM API key configured for {provider.value} (hash prefix: {key_hash}...)")
     
-    def get_openai_key(self) -> Optional[str]:
-        """Get the OpenAI API key if configured."""
-        return self._openai_key
+    def get_api_key(self) -> Optional[str]:
+        """Get the LLM API key if configured."""
+        return self._api_key
     
-    def clear_openai_key(self) -> None:
+    def get_provider(self) -> LLMProvider:
+        """Get the current LLM provider."""
+        return self._provider
+    
+    def clear_api_key(self) -> None:
         """Clear the stored API key."""
-        self._openai_key = None
+        self._api_key = None
         self._key_configured_at = None
         self._is_valid = None
         logger.info("LLM API key cleared")
     
     def is_configured(self) -> bool:
         """Check if an API key is configured."""
-        return self._openai_key is not None and len(self._openai_key) > 0
+        return self._api_key is not None and len(self._api_key) > 0
     
     def get_configured_at(self) -> Optional[datetime]:
         """Get when the key was configured."""
@@ -90,6 +108,21 @@ class RuntimeConfig:
     def get_validation_status(self) -> tuple[Optional[bool], Optional[datetime]]:
         """Get validation status and when it was last checked."""
         return self._is_valid, self._last_validation
+    
+    # Backwards compatibility
+    def set_openai_key(self, key: str) -> None:
+        """Alias for set_api_key with OpenAI provider."""
+        self.set_api_key(key, LLMProvider.OPENAI)
+    
+    def get_openai_key(self) -> Optional[str]:
+        """Get API key if provider is OpenAI."""
+        if self._provider == LLMProvider.OPENAI:
+            return self._api_key
+        return None
+    
+    def clear_openai_key(self) -> None:
+        """Alias for clear_api_key."""
+        self.clear_api_key()
 
 
 def get_runtime_config() -> RuntimeConfig:
@@ -107,11 +140,11 @@ class SetApiKeyRequest(BaseModel):
     api_key: str = Field(
         ...,
         min_length=10,
-        description="The LLM provider API key (e.g., OpenAI API key)"
+        description="The LLM provider API key"
     )
     provider: str = Field(
         default="openai",
-        description="LLM provider name"
+        description="LLM provider name (openai or gemini)"
     )
     
     @field_validator("api_key")
@@ -121,8 +154,15 @@ class SetApiKeyRequest(BaseModel):
         v = v.strip()
         if len(v) < 10:
             raise ValueError("API key is too short")
-        # OpenAI keys typically start with "sk-"
-        # But we don't enforce this to allow other providers
+        return v
+    
+    @field_validator("provider")
+    @classmethod
+    def validate_provider(cls, v: str) -> str:
+        """Validate provider name."""
+        v = v.lower().strip()
+        if v not in ["openai", "gemini"]:
+            raise ValueError("Provider must be 'openai' or 'gemini'")
         return v
 
 
@@ -144,6 +184,10 @@ class ApiKeyStatusResponse(BaseModel):
         description="When the key was last validated"
     )
     message: str = Field(description="Human-readable status message")
+    available_providers: list[str] = Field(
+        default=["openai", "gemini"],
+        description="List of supported LLM providers"
+    )
 
 
 class SetApiKeyResponse(BaseModel):
@@ -152,6 +196,7 @@ class SetApiKeyResponse(BaseModel):
     success: bool
     message: str
     configured_at: str
+    provider: str
 
 
 class ValidationResponse(BaseModel):
@@ -160,6 +205,7 @@ class ValidationResponse(BaseModel):
     valid: bool
     message: str
     tested_at: str
+    provider: str
 
 
 # -----------------------------------------------------------------------------
@@ -176,6 +222,10 @@ router = APIRouter(prefix="/config", tags=["Configuration"])
     summary="Set LLM API Key",
     description="""
     Configure the LLM API key at runtime.
+    
+    Supported providers:
+    - **openai**: OpenAI API (GPT-4, GPT-4o, etc.)
+    - **gemini**: Google Gemini API (Gemini Pro, Gemini Flash, etc.)
     
     **Security Notes:**
     - The key is stored in-memory only (not persisted to disk)
@@ -195,12 +245,14 @@ async def set_llm_api_key(request: SetApiKeyRequest) -> SetApiKeyResponse:
     config = get_runtime_config()
     
     try:
-        config.set_openai_key(request.api_key)
+        provider = LLMProvider.GEMINI if request.provider == "gemini" else LLMProvider.OPENAI
+        config.set_api_key(request.api_key, provider)
         
         return SetApiKeyResponse(
             success=True,
             message=f"API key configured for {request.provider}",
             configured_at=config.get_configured_at().isoformat() if config.get_configured_at() else "",
+            provider=request.provider,
         )
     except Exception as e:
         logger.error(f"Failed to set API key: {type(e).__name__}")
@@ -228,23 +280,25 @@ async def get_llm_status() -> ApiKeyStatusResponse:
     is_configured = config.is_configured()
     configured_at = config.get_configured_at()
     is_valid, last_validated = config.get_validation_status()
+    provider = config.get_provider().value
     
     if not is_configured:
-        message = "No API key configured. Add your OpenAI API key to enable AI features."
+        message = "No API key configured. Add your OpenAI or Gemini API key to enable AI features."
     elif is_valid is None:
-        message = "API key configured but not yet validated. Send a test message to validate."
+        message = f"API key configured for {provider} but not yet validated. Send a test message to validate."
     elif is_valid:
-        message = "API key configured and validated successfully."
+        message = f"API key for {provider} configured and validated successfully."
     else:
-        message = "API key configured but validation failed. Please check your key."
+        message = f"API key for {provider} configured but validation failed. Please check your key."
     
     return ApiKeyStatusResponse(
         configured=is_configured,
-        provider="openai",
+        provider=provider,
         configured_at=configured_at.isoformat() if configured_at else None,
         validated=is_valid,
         last_validated_at=last_validated.isoformat() if last_validated else None,
         message=message,
+        available_providers=["openai", "gemini"],
     )
 
 
@@ -268,13 +322,21 @@ async def validate_llm_key() -> ValidationResponse:
             detail="No API key configured. Set a key first.",
         )
     
+    provider = config.get_provider()
+    
     try:
-        # Import here to avoid circular imports
-        from app.integrations.openai_client import OpenAIClient, OpenAIConfig
-        
-        # Create client with runtime key
-        client_config = OpenAIConfig(api_key=config.get_openai_key())
-        client = OpenAIClient(client_config)
+        if provider == LLMProvider.GEMINI:
+            # Use Gemini client
+            from app.integrations.gemini_client import GeminiClient, GeminiConfig
+            
+            client_config = GeminiConfig(api_key=config.get_api_key())
+            client = GeminiClient(client_config)
+        else:
+            # Use OpenAI client
+            from app.integrations.openai_client import OpenAIClient, OpenAIConfig
+            
+            client_config = OpenAIConfig(api_key=config.get_api_key())
+            client = OpenAIClient(client_config)
         
         # Test with health check
         is_valid = await client.health_check()
@@ -283,18 +345,20 @@ async def validate_llm_key() -> ValidationResponse:
         
         return ValidationResponse(
             valid=is_valid,
-            message="API key is valid and working" if is_valid else "API key validation failed",
+            message=f"API key for {provider.value} is valid and working" if is_valid else f"API key validation failed for {provider.value}",
             tested_at=datetime.now(timezone.utc).isoformat(),
+            provider=provider.value,
         )
         
     except Exception as e:
-        logger.error(f"API key validation failed: {type(e).__name__}")
+        logger.error(f"API key validation failed: {type(e).__name__}: {str(e)}")
         config.set_validation_status(False)
         
         return ValidationResponse(
             valid=False,
             message=f"Validation failed: {str(e)}",
             tested_at=datetime.now(timezone.utc).isoformat(),
+            provider=provider.value,
         )
 
 
@@ -312,4 +376,4 @@ async def clear_llm_key() -> None:
     fallback logic until a new key is configured.
     """
     config = get_runtime_config()
-    config.clear_openai_key()
+    config.clear_api_key()
