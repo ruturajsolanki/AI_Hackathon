@@ -608,6 +608,178 @@ class ApiClient {
   async clearLlmKey(): Promise<ApiResult<void>> {
     return this.request<void>('DELETE', '/api/config/llm')
   }
+
+  // ===========================================================================
+  // Agent Configuration APIs
+  // ===========================================================================
+
+  /**
+   * Fetch all agent configurations.
+   */
+  async fetchAgentConfigs(): Promise<ApiResult<AgentConfigSummary[]>> {
+    return this.request<AgentConfigSummary[]>('GET', '/api/agent-config')
+  }
+
+  /**
+   * Fetch single agent configuration.
+   */
+  async fetchAgentConfig(agentId: string): Promise<ApiResult<AgentConfigDetail>> {
+    return this.request<AgentConfigDetail>('GET', `/api/agent-config/${agentId}`)
+  }
+
+  /**
+   * Update agent configuration.
+   */
+  async updateAgentConfig(
+    agentId: string,
+    params: UpdateAgentConfigParams
+  ): Promise<ApiResult<AgentConfigDetail>> {
+    const body: Record<string, unknown> = {}
+    if (params.systemPrompt !== undefined) body.system_prompt = params.systemPrompt
+    if (params.userPromptTemplate !== undefined) body.user_prompt_template = params.userPromptTemplate
+    if (params.model !== undefined) body.model = params.model
+    if (params.temperature !== undefined) body.temperature = params.temperature
+    if (params.maxTokens !== undefined) body.max_tokens = params.maxTokens
+    if (params.topP !== undefined) body.top_p = params.topP
+    if (params.confidenceThreshold !== undefined) body.confidence_threshold = params.confidenceThreshold
+    if (params.fallbackEnabled !== undefined) body.fallback_enabled = params.fallbackEnabled
+    if (params.outputSchema !== undefined) body.output_schema = params.outputSchema
+
+    return this.request<AgentConfigDetail>('PUT', `/api/agent-config/${agentId}`, body)
+  }
+
+  /**
+   * Reset agent configuration to defaults.
+   */
+  async resetAgentConfig(agentId: string): Promise<ApiResult<AgentConfigDetail>> {
+    return this.request<AgentConfigDetail>('POST', `/api/agent-config/${agentId}/reset`)
+  }
+
+  /**
+   * Test a prompt configuration.
+   */
+  async testPrompt(agentId: string, params: TestPromptParams): Promise<ApiResult<TestPromptResponse>> {
+    return this.request<TestPromptResponse>('POST', `/api/agent-config/${agentId}/test`, {
+      system_prompt: params.systemPrompt,
+      user_prompt: params.userPrompt,
+      model: params.model ?? 'gpt-4o-mini',
+      temperature: params.temperature ?? 0.3,
+      test_input: params.testInput ?? 'Hello, I have a question.',
+    })
+  }
+
+  /**
+   * Fetch agent configuration history.
+   */
+  async fetchAgentConfigHistory(agentId: string, limit: number = 10): Promise<ApiResult<Array<{
+    agentId: string
+    action: string
+    timestamp: string
+    previous?: Record<string, unknown>
+  }>>> {
+    return this.request('GET', `/api/agent-config/${agentId}/history?limit=${limit}`)
+  }
+
+  // ===========================================================================
+  // Authentication APIs
+  // ===========================================================================
+
+  /**
+   * Login and get tokens.
+   */
+  async login(params: LoginParams): Promise<ApiResult<AuthTokens>> {
+    // OAuth2 expects form data, but we use JSON
+    const formData = new URLSearchParams()
+    formData.append('username', params.email)
+    formData.append('password', params.password)
+
+    const url = `${this.baseUrl}/api/auth/login`
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: formData,
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        return {
+          data: null,
+          error: {
+            code: 'AUTH_ERROR',
+            message: data?.detail ?? 'Login failed',
+            status: response.status,
+          },
+          success: false,
+        }
+      }
+
+      return {
+        data: this.transformResponse<AuthTokens>(data),
+        error: null,
+        success: true,
+      }
+    } catch {
+      return {
+        data: null,
+        error: {
+          code: 'NETWORK_ERROR',
+          message: 'Network request failed',
+          status: 0,
+        },
+        success: false,
+      }
+    }
+  }
+
+  /**
+   * Refresh access token.
+   */
+  async refreshToken(refreshToken: string): Promise<ApiResult<AuthTokens>> {
+    return this.request<AuthTokens>('POST', '/api/auth/refresh', {
+      refresh_token: refreshToken,
+    })
+  }
+
+  /**
+   * Register new user.
+   */
+  async register(params: RegisterParams): Promise<ApiResult<UserInfo>> {
+    return this.request<UserInfo>('POST', '/api/auth/register', {
+      email: params.email,
+      password: params.password,
+      full_name: params.fullName,
+    })
+  }
+
+  /**
+   * Get current user info.
+   */
+  async getCurrentUser(): Promise<ApiResult<UserInfo>> {
+    return this.request<UserInfo>('GET', '/api/auth/me')
+  }
+
+  /**
+   * Check auth status.
+   */
+  async getAuthStatus(): Promise<ApiResult<AuthStatusResponse>> {
+    return this.request<AuthStatusResponse>('GET', '/api/auth/status')
+  }
+
+  /**
+   * Set auth token for subsequent requests.
+   */
+  setAuthToken(token: string): void {
+    this.defaultHeaders['Authorization'] = `Bearer ${token}`
+  }
+
+  /**
+   * Clear auth token.
+   */
+  clearAuthToken(): void {
+    delete this.defaultHeaders['Authorization']
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -633,6 +805,97 @@ export interface LlmValidationResponse {
   valid: boolean
   message: string
   testedAt: string
+}
+
+// Agent Configuration Types
+export interface AgentConfigSummary {
+  agentId: string
+  agentName: string
+  agentType: 'primary' | 'supervisor' | 'escalation'
+  description: string
+  model: string
+  temperature: number
+  confidenceThreshold: number
+  isCustom: boolean
+  version: number
+  updatedAt: string
+}
+
+export interface AgentConfigDetail extends AgentConfigSummary {
+  systemPrompt: string
+  userPromptTemplate: string
+  outputSchema: Record<string, unknown>
+  maxTokens: number
+  topP: number
+  fallbackEnabled: boolean
+  createdAt: string
+  updatedBy: string | null
+}
+
+export interface UpdateAgentConfigParams {
+  systemPrompt?: string
+  userPromptTemplate?: string
+  model?: string
+  temperature?: number
+  maxTokens?: number
+  topP?: number
+  confidenceThreshold?: number
+  fallbackEnabled?: boolean
+  outputSchema?: Record<string, unknown>
+}
+
+export interface TestPromptParams {
+  systemPrompt: string
+  userPrompt: string
+  model?: string
+  temperature?: number
+  testInput?: string
+}
+
+export interface TestPromptResponse {
+  success: boolean
+  output?: string
+  parsedOutput?: Record<string, unknown>
+  latencyMs: number
+  tokensUsed?: number
+  error?: string
+}
+
+// Authentication Types
+export interface LoginParams {
+  email: string
+  password: string
+}
+
+export interface AuthTokens {
+  accessToken: string
+  refreshToken: string
+  tokenType: string
+  expiresIn: number
+}
+
+export interface UserInfo {
+  userId: string
+  email: string
+  fullName: string
+  role: 'admin' | 'user'
+  isActive: boolean
+  createdAt: string
+}
+
+export interface RegisterParams {
+  email: string
+  password: string
+  fullName: string
+}
+
+export interface AuthStatusResponse {
+  available: boolean
+  demoCredentials?: {
+    email: string
+    password: string
+  }
+  message: string
 }
 
 // -----------------------------------------------------------------------------
@@ -685,6 +948,37 @@ export const getLlmStatus = () => apiClient.getLlmStatus()
 export const validateLlmKey = () => apiClient.validateLlmKey()
 
 export const clearLlmKey = () => apiClient.clearLlmKey()
+
+// Agent Configuration exports
+export const fetchAgentConfigs = () => apiClient.fetchAgentConfigs()
+
+export const fetchAgentConfig = (agentId: string) => apiClient.fetchAgentConfig(agentId)
+
+export const updateAgentConfig = (agentId: string, params: UpdateAgentConfigParams) =>
+  apiClient.updateAgentConfig(agentId, params)
+
+export const resetAgentConfig = (agentId: string) => apiClient.resetAgentConfig(agentId)
+
+export const testPrompt = (agentId: string, params: TestPromptParams) =>
+  apiClient.testPrompt(agentId, params)
+
+export const fetchAgentConfigHistory = (agentId: string, limit?: number) =>
+  apiClient.fetchAgentConfigHistory(agentId, limit)
+
+// Authentication exports
+export const login = (params: LoginParams) => apiClient.login(params)
+
+export const refreshToken = (token: string) => apiClient.refreshToken(token)
+
+export const register = (params: RegisterParams) => apiClient.register(params)
+
+export const getCurrentUser = () => apiClient.getCurrentUser()
+
+export const getAuthStatus = () => apiClient.getAuthStatus()
+
+export const setAuthToken = (token: string) => apiClient.setAuthToken(token)
+
+export const clearAuthToken = () => apiClient.clearAuthToken()
 
 export { apiClient }
 export default apiClient

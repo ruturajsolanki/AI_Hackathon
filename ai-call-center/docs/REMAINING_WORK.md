@@ -2,7 +2,7 @@
 
 ## AI-Powered Digital Call Center - Deferred Features & Future Roadmap
 
-**Document Version:** 1.0.0  
+**Document Version:** 1.1.0  
 **Last Updated:** January 2026
 
 ---
@@ -13,39 +13,92 @@ This document outlines features that have been **intentionally deferred** from t
 
 ---
 
-## 1. Authentication & Multi-Tenancy
+## ✅ COMPLETED: Authentication & API Security
+
+**Status:** ✅ IMPLEMENTED
+
+The following authentication features have been implemented:
+
+- JWT-based authentication with access and refresh tokens
+- Demo user with credentials: `demo@example.com` / `demo123`
+- User registration endpoint
+- Token refresh with rotation
+- Current user info endpoint
+- Authentication status check
+- OAuth2-compatible login endpoint
+
+**Files Added:**
+- `app/api/auth.py` - Authentication API routes
+- Dependencies: `python-jose[cryptography]`, `passlib[bcrypt]`, `python-multipart`
+
+**Remaining for Production:**
+- Redis session storage (currently in-memory)
+- Role-based access control on all endpoints
+- Password reset flow
+- Email verification
+
+---
+
+## ✅ COMPLETED: MongoDB Integration
+
+**Status:** ✅ IMPLEMENTED
+
+MongoDB integration has been implemented:
+
+- Async operations with Motor
+- Connection pooling
+- Graceful fallback to SQLite for local development
+- Index management for performance
+- Complete CRUD operations for all entities
+
+**Files Added:**
+- `app/persistence/mongodb.py` - MongoDB persistence layer
+
+**Configuration:**
+- Set `MONGODB_URI` environment variable to enable
+- Falls back to SQLite if MongoDB is unavailable
+
+---
+
+## ✅ COMPLETED: Agent Programming UI
+
+**Status:** ✅ IMPLEMENTED
+
+A visual interface for configuring AI agent prompts and settings:
+
+- View/edit system prompts for all 3 agents (Primary, Supervisor, Escalation)
+- View/edit user prompt templates
+- Configure LLM settings (model, temperature, max_tokens, top_p)
+- Set confidence thresholds
+- Enable/disable fallback logic
+- Test prompts with sample inputs
+- View output schemas
+- Reset to defaults
+
+**Files Added:**
+- `app/api/agent_config.py` - Agent Configuration API
+- `frontend/src/components/agent-programming/AgentProgrammingPage.tsx`
+- `frontend/src/components/agent-programming/AgentProgrammingPage.module.css`
+
+**Access:**
+- Navigate to `/agent-programming` or click "Agent Studio" in sidebar
+
+---
+
+## 2. Multi-Tenancy (Future)
 
 ### Why Deferred
 
-- MVP focuses on demonstrating AI capabilities
-- Auth implementation varies significantly by enterprise requirements
-- Adds complexity that obscures core functionality for demos/judges
+- Requires additional database schema changes
+- Complex row-level security implementation
+- Outside scope of current MVP
 
 ### Implementation Plan
 
-**Phase 1: API Authentication**
-```
-Components Affected:
-- app/api/*  (all endpoints)
-- app/core/config.py
-- app/main.py
-
-Approach:
-1. Add JWT-based authentication middleware
-2. Create /auth/login and /auth/refresh endpoints
-3. Add Bearer token validation to all routes
-4. Store sessions in Redis
-
-Dependencies:
-- python-jose[cryptography]
-- passlib[bcrypt]
-- Redis for session storage
-```
-
-**Phase 2: Multi-Tenancy**
 ```
 Components Affected:
 - app/persistence/store.py
+- app/persistence/mongodb.py
 - app/memory/context_store.py
 - app/analytics/metrics.py
 - All database queries
@@ -59,7 +112,6 @@ Approach:
 
 ### Estimated Effort
 
-- Authentication: 2-3 days
 - Multi-tenancy: 4-5 days
 
 ---

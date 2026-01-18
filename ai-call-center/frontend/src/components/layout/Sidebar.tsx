@@ -6,7 +6,8 @@ import {
   BarChart3, 
   Settings,
   Headphones,
-  Zap
+  Zap,
+  Code2
 } from 'lucide-react'
 import styles from './Sidebar.module.css'
 
@@ -15,6 +16,7 @@ const navItems = [
   { to: '/demo', icon: MessageSquare, label: 'Live Demo', description: 'Interactive call simulation' },
   { to: '/interactions', icon: Headphones, label: 'Interactions', description: 'View call history' },
   { to: '/agents', icon: Users, label: 'Agents', description: 'View AI agents' },
+  { to: '/agent-programming', icon: Code2, label: 'Agent Studio', description: 'Configure agent prompts and LLM settings' },
   { to: '/analytics', icon: BarChart3, label: 'Analytics', description: 'View detailed analytics' },
   { to: '/settings', icon: Settings, label: 'Settings', description: 'Configure preferences' },
 ]

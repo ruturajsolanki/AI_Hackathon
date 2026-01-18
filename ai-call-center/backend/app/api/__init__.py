@@ -11,15 +11,19 @@ from app.api.analytics import router as analytics_router
 from app.api.history import router as history_router
 from app.api.agents import router as agents_router
 from app.api.config import router as config_router
+from app.api.agent_config import router as agent_config_router
+from app.api.auth import router as auth_router
 
 router = APIRouter()
 
 # Register sub-routers
+router.include_router(auth_router)  # Auth first for login endpoint
 router.include_router(interactions_router)
 router.include_router(analytics_router)
 router.include_router(history_router)
 router.include_router(agents_router)
 router.include_router(config_router)
+router.include_router(agent_config_router)
 
 
 @router.get("/", tags=["API"])
