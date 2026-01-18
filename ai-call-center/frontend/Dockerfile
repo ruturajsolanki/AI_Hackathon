@@ -26,16 +26,8 @@ RUN npm install -g serve
 # Copy built files from builder
 COPY --from=builder /app/dist ./dist
 
-# Set environment variable
-ENV PORT=3000
+# Expose port 8080 (serve default)
+EXPOSE 8080
 
-# Create start script
-RUN echo '#!/bin/sh' > /start.sh && \
-    echo 'serve -s dist -l ${PORT:-3000}' >> /start.sh && \
-    chmod +x /start.sh
-
-# Expose port
-EXPOSE 3000
-
-# Start the app
-CMD ["/start.sh"]
+# Start serve on port 8080
+CMD ["serve", "-s", "dist", "-l", "8080"]
