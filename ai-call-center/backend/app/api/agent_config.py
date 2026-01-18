@@ -493,7 +493,16 @@ async def test_agent_prompt(
         provider = runtime_config.get_provider()
         api_key = runtime_config.get_api_key()
         
-        if provider == LLMProvider.GEMINI:
+        if provider == LLMProvider.OLLAMA:
+            from app.integrations.ollama_client import OllamaClient, OllamaConfig
+            ollama_url = runtime_config.get_ollama_url()
+            client_config = OllamaConfig(base_url=ollama_url)
+            client = OllamaClient(client_config)
+            # Use appropriate Ollama model
+            model = request.model
+            if model.startswith("gpt") or model.startswith("gemini"):
+                model = "llama3.1:8b"  # Default Ollama model
+        elif provider == LLMProvider.GEMINI:
             from app.integrations.gemini_client import GeminiClient, GeminiConfig
             client_config = GeminiConfig(api_key=api_key)
             client = GeminiClient(client_config)
