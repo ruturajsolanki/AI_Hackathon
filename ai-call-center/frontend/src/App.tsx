@@ -6,6 +6,7 @@ import { InteractionsPage } from './components/interactions/InteractionsPage'
 import { InteractionDetailPage } from './components/interactions/InteractionDetailPage'
 import { AgentsPage } from './components/agents/AgentsPage'
 import { AnalyticsPage } from './components/analytics/AnalyticsPage'
+import { SettingsPage } from './components/settings/SettingsPage'
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
         <Route path="interactions/:interactionId" element={<InteractionDetailPage />} />
         <Route path="agents" element={<AgentsPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
+        <Route path="settings" element={<SettingsPage />} />
       </Route>
     </Routes>
   )

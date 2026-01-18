@@ -16,7 +16,7 @@ const navItems = [
   { to: '/interactions', icon: Headphones, label: 'Interactions', description: 'View call history' },
   { to: '/agents', icon: Users, label: 'Agents', description: 'View AI agents' },
   { to: '/analytics', icon: BarChart3, label: 'Analytics', description: 'View detailed analytics' },
-  { to: '/settings', icon: Settings, label: 'Settings', disabled: true, description: 'Coming soon' },
+  { to: '/settings', icon: Settings, label: 'Settings', description: 'Configure preferences' },
 ]
 
 export function Sidebar() {
