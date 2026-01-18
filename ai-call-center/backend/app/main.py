@@ -9,6 +9,10 @@ import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
