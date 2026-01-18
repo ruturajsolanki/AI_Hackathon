@@ -626,14 +626,29 @@ export function CallSimulator() {
       content: '🔄 Transferring to human agent... Please hold.',
     })
     
-    // End the AI call session
-    if (callId) {
-      await endCall(callId)
+    // End the AI call session and get the session URL
+    const currentCallId = callId
+    if (currentCallId) {
+      await endCall(currentCallId)
     }
+    
+    // Generate customer session URL
+    const sessionId = currentCallId || crypto.randomUUID()
+    const customerSessionUrl = `${window.location.origin}/customer-session/${sessionId}`
     
     addMessage({
       role: 'system',
-      content: '✅ Call transferred to human agent. Open the Tickets page to view and accept this ticket.',
+      content: `✅ Your call has been escalated to a human agent.`,
+    })
+    
+    addMessage({
+      role: 'system',
+      content: `📱 Customer Session Link: ${customerSessionUrl}`,
+    })
+    
+    addMessage({
+      role: 'system',
+      content: '👆 Open the link above in a new window to continue chatting with the human agent when they join.',
     })
     
     // Reset call state

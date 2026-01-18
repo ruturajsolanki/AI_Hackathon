@@ -10,6 +10,7 @@ import { AnalyticsPage } from './components/analytics/AnalyticsPage'
 import { SettingsPage } from './components/settings/SettingsPage'
 import { TicketsDashboard } from './components/tickets/TicketsDashboard'
 import { LiveSession } from './components/session/LiveSession'
+import { CustomerSession } from './components/session/CustomerSession'
 import { LoginPage } from './components/auth/LoginPage'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 
@@ -45,8 +46,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function AppRoutes() {
   return (
     <Routes>
-      {/* Public route */}
+      {/* Public routes */}
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/customer-session/:sessionId" element={<CustomerSession />} />
       
       {/* Protected routes */}
       <Route path="/" element={

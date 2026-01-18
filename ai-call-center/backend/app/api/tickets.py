@@ -511,3 +511,152 @@ def _generate_suggested_actions(ticket: Ticket, messages: list, decisions: list)
         ]
     
     return actions[:5]  # Max 5 suggestions
+
+
+# -----------------------------------------------------------------------------
+# Live Session Management
+# -----------------------------------------------------------------------------
+
+# In-memory session storage
+_sessions: Dict[str, dict] = {}
+
+
+class SessionMessage(BaseModel):
+    """A message in a live session."""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    role: str  # "customer" | "agent" | "system"
+    content: str
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    is_human: bool = True
+
+
+class SendMessageRequest(BaseModel):
+    """Request to send a message in a session."""
+    role: str
+    content: str
+
+
+class SessionStatus(BaseModel):
+    """Status of a live session."""
+    session_id: str
+    is_active: bool
+    agent_connected: bool
+    agent_name: Optional[str]
+    customer_connected: bool
+    message_count: int
+
+
+class SessionMessagesResponse(BaseModel):
+    """Response with session messages."""
+    messages: List[dict]
+
+
+@router.get(
+    "/session/{session_id}/status",
+    response_model=SessionStatus,
+    summary="Get session status",
+)
+async def get_session_status(session_id: str) -> SessionStatus:
+    """Get the current status of a live session."""
+    session = _sessions.get(session_id, {})
+    
+    return SessionStatus(
+        session_id=session_id,
+        is_active=session.get("is_active", False),
+        agent_connected=session.get("agent_connected", False),
+        agent_name=session.get("agent_name"),
+        customer_connected=session.get("customer_connected", True),
+        message_count=len(session.get("messages", [])),
+    )
+
+
+@router.get(
+    "/session/{session_id}/messages",
+    response_model=SessionMessagesResponse,
+    summary="Get session messages",
+)
+async def get_session_messages(session_id: str) -> SessionMessagesResponse:
+    """Get all messages in a live session."""
+    session = _sessions.get(session_id, {})
+    messages = session.get("messages", [])
+    
+    return SessionMessagesResponse(messages=messages)
+
+
+@router.post(
+    "/session/{session_id}/message",
+    summary="Send a message in session",
+)
+async def send_session_message(session_id: str, request: SendMessageRequest):
+    """Send a message in a live session."""
+    if session_id not in _sessions:
+        _sessions[session_id] = {
+            "is_active": True,
+            "agent_connected": False,
+            "customer_connected": True,
+            "messages": [],
+        }
+    
+    message = {
+        "id": str(uuid4()),
+        "role": request.role,
+        "content": request.content,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "is_human": True,
+    }
+    
+    _sessions[session_id]["messages"].append(message)
+    
+    return {"success": True, "message_id": message["id"]}
+
+
+@router.post(
+    "/session/{session_id}/agent-join",
+    summary="Agent joins session",
+)
+async def agent_join_session(session_id: str, agent_name: str = "Human Agent"):
+    """Mark that an agent has joined the session."""
+    if session_id not in _sessions:
+        _sessions[session_id] = {
+            "is_active": True,
+            "agent_connected": False,
+            "customer_connected": True,
+            "messages": [],
+        }
+    
+    _sessions[session_id]["agent_connected"] = True
+    _sessions[session_id]["agent_name"] = agent_name
+    
+    # Add system message
+    system_message = {
+        "id": str(uuid4()),
+        "role": "system",
+        "content": f"{agent_name} has joined the chat.",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "is_human": False,
+    }
+    _sessions[session_id]["messages"].append(system_message)
+    
+    return {"success": True, "message": f"Agent {agent_name} joined session"}
+
+
+@router.post(
+    "/session/{session_id}/end",
+    summary="End session",
+)
+async def end_session(session_id: str, resolution: str = "resolved"):
+    """End a live session."""
+    if session_id in _sessions:
+        _sessions[session_id]["is_active"] = False
+        
+        # Add system message
+        system_message = {
+            "id": str(uuid4()),
+            "role": "system",
+            "content": f"Session ended. Resolution: {resolution}",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "is_human": False,
+        }
+        _sessions[session_id]["messages"].append(system_message)
+    
+    return {"success": True, "message": "Session ended"}
