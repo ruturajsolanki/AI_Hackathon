@@ -104,6 +104,61 @@ export interface AnalyticsResponse {
   callsPerHour: CallsPerHourItem[]
 }
 
+// History Types
+export interface InteractionSummary {
+  interactionId: string
+  customerId: string | null
+  channel: string
+  status: string
+  startedAt: string
+  endedAt: string | null
+  durationSeconds: number | null
+  messageCount: number
+  wasEscalated: boolean
+}
+
+export interface InteractionListResponse {
+  interactions: InteractionSummary[]
+  total: number
+  page: number
+  pageSize: number
+  hasMore: boolean
+}
+
+export interface MessageItem {
+  messageId: string
+  role: 'customer' | 'agent' | 'system'
+  content: string
+  timestamp: string
+  intent: string | null
+  emotion: string | null
+  confidence: number | null
+}
+
+export interface DecisionItem {
+  decisionId: string
+  agentType: 'primary' | 'supervisor' | 'escalation'
+  summary: string
+  confidence: number
+  confidenceLevel: string
+  timestamp: string
+  processingTimeMs: number
+}
+
+export interface InteractionDetail {
+  interactionId: string
+  customerId: string | null
+  channel: string
+  status: string
+  startedAt: string
+  endedAt: string | null
+  durationSeconds: number | null
+  messages: MessageItem[]
+  decisions: DecisionItem[]
+  wasEscalated: boolean
+  resolutionSummary: string | null
+}
+
 // -----------------------------------------------------------------------------
 // API Client Class
 // -----------------------------------------------------------------------------
@@ -332,6 +387,42 @@ class ApiClient {
   async healthCheck(): Promise<ApiResult<{ status: string; version: string }>> {
     return this.request('GET', '/health')
   }
+
+  /**
+   * Fetch interaction history list.
+   */
+  async fetchInteractions(params: {
+    page?: number
+    pageSize?: number
+    status?: string
+  } = {}): Promise<ApiResult<InteractionListResponse>> {
+    const queryParams = new URLSearchParams()
+    if (params.page) queryParams.set('page', params.page.toString())
+    if (params.pageSize) queryParams.set('page_size', params.pageSize.toString())
+    if (params.status) queryParams.set('status', params.status)
+    
+    const queryString = queryParams.toString()
+    const endpoint = `/api/history/interactions${queryString ? `?${queryString}` : ''}`
+    return this.request<InteractionListResponse>('GET', endpoint)
+  }
+
+  /**
+   * Fetch single interaction details.
+   */
+  async fetchInteractionDetail(interactionId: string): Promise<ApiResult<InteractionDetail>> {
+    if (!interactionId) {
+      return {
+        data: null,
+        error: {
+          code: 'INVALID_PARAMS',
+          message: 'Interaction ID is required',
+          status: 400,
+        },
+        success: false,
+      }
+    }
+    return this.request<InteractionDetail>('GET', `/api/history/interactions/${interactionId}`)
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -360,6 +451,12 @@ export const fetchAnalytics = () => apiClient.fetchAnalytics()
 export const getCallStatus = (callId: string) => apiClient.getCallStatus(callId)
 
 export const healthCheck = () => apiClient.healthCheck()
+
+export const fetchInteractions = (params?: { page?: number; pageSize?: number; status?: string }) =>
+  apiClient.fetchInteractions(params)
+
+export const fetchInteractionDetail = (interactionId: string) =>
+  apiClient.fetchInteractionDetail(interactionId)
 
 export { apiClient }
 export default apiClient

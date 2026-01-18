@@ -13,7 +13,7 @@ import styles from './Sidebar.module.css'
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', description: 'View analytics overview' },
   { to: '/demo', icon: MessageSquare, label: 'Live Demo', description: 'Interactive call simulation' },
-  { to: '/interactions', icon: Headphones, label: 'Interactions', disabled: true, description: 'Coming soon' },
+  { to: '/interactions', icon: Headphones, label: 'Interactions', description: 'View call history' },
   { to: '/agents', icon: Users, label: 'Agents', disabled: true, description: 'Coming soon' },
   { to: '/analytics', icon: BarChart3, label: 'Analytics', disabled: true, description: 'Coming soon' },
   { to: '/settings', icon: Settings, label: 'Settings', disabled: true, description: 'Coming soon' },
