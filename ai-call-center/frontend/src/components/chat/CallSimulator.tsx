@@ -332,18 +332,33 @@ export function CallSimulator() {
 
       // Handle escalation automatically
       if (data.shouldEscalate && !isEscalated) {
-        // IMMEDIATELY stop everything
+        // IMMEDIATELY stop everything and end call
         stopSpeech()
         stopListening()
         setContinuousVoiceMode(false)
+        setIsEscalated(true)
+        setIsCallActive(false)
         
         addMessage({
           role: 'system',
           content: `⚠️ Escalation triggered: ${data.escalationReason || 'Complex issue detected'}`,
         })
         
-        // Trigger escalation immediately
-        handleEscalateToHuman()
+        addMessage({
+          role: 'system',
+          content: '✅ Call transferred! A ticket has been created. Check the Tickets page.',
+        })
+        
+        // Generate customer session URL
+        const sessionUrl = `${window.location.origin}/customer-session/${callId}`
+        setCustomerSessionUrl(sessionUrl)
+        setShowEscalationPanel(true)
+        
+        // End the call
+        if (callId) {
+          endCall(callId).catch(console.error)
+        }
+        setCallId(null)
       }
 
     } else {
@@ -356,7 +371,7 @@ export function CallSimulator() {
         content: `Error: ${result.error?.message || 'Failed to process message'}`,
       })
     }
-  }, [callId, isCallActive, agentState.status, isEscalated, addMessage, speakResponse, stopListening, handleEscalateToHuman])
+  }, [callId, isCallActive, agentState.status, isEscalated, addMessage, speakResponse, stopListening])
 
   // Send a voice message directly (bypasses input state)
   const sendVoiceMessage = useCallback(async (messageText: string) => {
@@ -442,18 +457,33 @@ export function CallSimulator() {
 
       // Handle escalation automatically
       if (data.shouldEscalate && !isEscalated) {
-        // IMMEDIATELY stop everything
+        // IMMEDIATELY stop everything and end call
         stopSpeech()
         stopListening()
         setContinuousVoiceMode(false)
+        setIsEscalated(true)
+        setIsCallActive(false)
         
         addMessage({
           role: 'system',
           content: `⚠️ Escalation triggered: ${data.escalationReason || 'Complex issue detected'}`,
         })
         
-        // Trigger escalation immediately
-        handleEscalateToHuman()
+        addMessage({
+          role: 'system',
+          content: '✅ Call transferred! A ticket has been created. Check the Tickets page.',
+        })
+        
+        // Generate customer session URL
+        const sessionUrl = `${window.location.origin}/customer-session/${callId}`
+        setCustomerSessionUrl(sessionUrl)
+        setShowEscalationPanel(true)
+        
+        // End the call
+        if (callId) {
+          endCall(callId).catch(console.error)
+        }
+        setCallId(null)
       }
 
     } else {
@@ -464,7 +494,7 @@ export function CallSimulator() {
         content: `Error: ${result.error?.message || 'Failed to process message'}`,
       })
     }
-  }, [callId, isEscalated, addMessage, speakResponse, getConfidenceLevel, getConfidenceScore, stopListening, handleEscalateToHuman])
+  }, [callId, isEscalated, addMessage, speakResponse, getConfidenceLevel, getConfidenceScore, stopListening])
 
   // Auto-send when speech recognition stops (naturally or by clicking mic)
   useEffect(() => {
@@ -788,10 +818,12 @@ export function CallSimulator() {
 
       // Handle escalation automatically - no manual button needed
       if (data.shouldEscalate && !isEscalated) {
-        // IMMEDIATELY stop listening to prevent more messages
+        // IMMEDIATELY stop everything and end call
         stopSpeech()
         stopListening()
         setContinuousVoiceMode(false)
+        setIsEscalated(true)
+        setIsCallActive(false)
         
         addMessage({
           role: 'system',
@@ -800,11 +832,19 @@ export function CallSimulator() {
         
         addMessage({
           role: 'system',
-          content: '🔄 Transferring to human agent...',
+          content: '✅ Call transferred! A ticket has been created. Check the Tickets page.',
         })
         
-        // Trigger the escalation immediately
-        handleEscalateToHuman()
+        // Generate customer session URL
+        const sessionUrl = `${window.location.origin}/customer-session/${callId}`
+        setCustomerSessionUrl(sessionUrl)
+        setShowEscalationPanel(true)
+        
+        // End the call
+        if (callId) {
+          endCall(callId).catch(console.error)
+        }
+        setCallId(null)
       }
 
     } else {
