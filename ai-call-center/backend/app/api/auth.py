@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # Check if auth libraries are available
 try:
     from jose import jwt, JWTError
-    from passlib.context import CryptContext
+    import hashlib
     AUTH_AVAILABLE = True
 except ImportError:
     AUTH_AVAILABLE = False
@@ -42,8 +42,15 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
-# Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto") if AUTH_AVAILABLE else None
+# Simple password hashing (use bcrypt in production with proper setup)
+def hash_password(password: str) -> str:
+    """Hash password using SHA-256 with salt. Use bcrypt in production."""
+    salt = SECRET_KEY[:16]
+    return hashlib.sha256(f"{salt}{password}".encode()).hexdigest()
+
+def verify_password_hash(password: str, hashed: str) -> bool:
+    """Verify password against hash."""
+    return hash_password(password) == hashed
 
 # OAuth2 scheme
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
@@ -75,7 +82,7 @@ class UserStore:
         self._users["demo@example.com"] = {
             "user_id": demo_id,
             "email": "demo@example.com",
-            "hashed_password": pwd_context.hash("demo123"),
+            "hashed_password": hash_password("demo123"),
             "full_name": "Demo User",
             "role": "admin",
             "is_active": True,
@@ -99,7 +106,7 @@ class UserStore:
         self._users[email] = {
             "user_id": user_id,
             "email": email,
-            "hashed_password": pwd_context.hash(password),
+            "hashed_password": hash_password(password),
             "full_name": full_name,
             "role": role,
             "is_active": True,
@@ -180,7 +187,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash."""
     if not AUTH_AVAILABLE:
         return False
-    return pwd_context.verify(plain_password, hashed_password)
+    return verify_password_hash(plain_password, hashed_password)
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
