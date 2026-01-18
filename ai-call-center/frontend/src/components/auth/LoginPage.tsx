@@ -4,17 +4,26 @@
  * Modern, professional authentication page for the AI Call Center.
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { login, setAuthToken } from '../../services/apiClient'
+import { login as apiLogin } from '../../services/apiClient'
+import { useAuth } from '../../contexts/AuthContext'
 import styles from './LoginPage.module.css'
 
 export function LoginPage() {
   const navigate = useNavigate()
+  const { login, isAuthenticated, isLoading: authLoading } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      navigate('/', { replace: true })
+    }
+  }, [authLoading, isAuthenticated, navigate])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -22,26 +31,62 @@ export function LoginPage() {
     setIsLoading(true)
 
     try {
-      const result = await login({ email, password })
+      const result = await apiLogin({ email, password })
       
       if (result.success && result.data) {
-        localStorage.setItem('access_token', result.data.accessToken)
-        localStorage.setItem('refresh_token', result.data.refreshToken)
-        setAuthToken(result.data.accessToken)
-        navigate('/')
+        // Use the auth context login method to properly update state
+        await login(result.data.accessToken, result.data.refreshToken)
+        navigate('/', { replace: true })
       } else {
-        setError(result.error?.message || 'Invalid credentials')
+        setError(result.error?.message || 'Invalid email or password')
       }
-    } catch {
-      setError('Connection failed. Please try again.')
+    } catch (err) {
+      console.error('Login error:', err)
+      setError('Connection failed. Please check if the backend is running.')
     }
     
     setIsLoading(false)
   }
 
-  const handleDemoLogin = () => {
+  const handleDemoLogin = async () => {
     setEmail('demo@example.com')
     setPassword('demo123')
+    // Auto-submit after filling
+    setError(null)
+    setIsLoading(true)
+    
+    try {
+      const result = await apiLogin({ email: 'demo@example.com', password: 'demo123' })
+      
+      if (result.success && result.data) {
+        await login(result.data.accessToken, result.data.refreshToken)
+        navigate('/', { replace: true })
+      } else {
+        setError(result.error?.message || 'Demo login failed')
+      }
+    } catch (err) {
+      console.error('Demo login error:', err)
+      setError('Connection failed. Please check if the backend is running.')
+    }
+    
+    setIsLoading(false)
+  }
+
+  // Show loading while checking auth state
+  if (authLoading) {
+    return (
+      <div className={styles.page}>
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          width: '100%',
+          color: 'white'
+        }}>
+          Loading...
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -106,7 +151,7 @@ export function LoginPage() {
 
           {error && (
             <div className={styles.error}>
-              {error}
+              <span>⚠️</span> {error}
             </div>
           )}
 
@@ -122,6 +167,7 @@ export function LoginPage() {
                 required
                 autoComplete="email"
                 autoFocus
+                disabled={isLoading}
               />
             </div>
 
@@ -135,6 +181,7 @@ export function LoginPage() {
                 placeholder="Enter your password"
                 required
                 autoComplete="current-password"
+                disabled={isLoading}
               />
             </div>
 
@@ -152,19 +199,20 @@ export function LoginPage() {
           </form>
 
           <div className={styles.divider}>
-            <span>Demo Access</span>
+            <span>Quick Access</span>
           </div>
 
           <button
             type="button"
             className={styles.demoBtn}
             onClick={handleDemoLogin}
+            disabled={isLoading}
           >
-            Fill Demo Credentials
+            🚀 Login with Demo Account
           </button>
           
           <p className={styles.demoNote}>
-            Use <strong>demo@example.com</strong> with password <strong>demo123</strong>
+            Demo: <code>demo@example.com</code> / <code>demo123</code>
           </p>
         </div>
       </div>

@@ -5,7 +5,7 @@
  * Handles token storage, refresh, and protected routes.
  */
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { 
   getCurrentUser, 
@@ -19,7 +19,7 @@ interface AuthContextType {
   user: UserInfo | null
   isAuthenticated: boolean
   isLoading: boolean
-  login: (accessToken: string, refreshToken: string) => void
+  login: (accessToken: string, refreshToken: string) => Promise<void>
   logout: () => void
 }
 
@@ -31,51 +31,92 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate()
   const location = useLocation()
 
+  const clearAuth = useCallback(() => {
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
+    clearAuthToken()
+    setUser(null)
+  }, [])
+
+  // Login function - stores tokens and fetches user
+  const login = useCallback(async (accessToken: string, refreshToken: string) => {
+    try {
+      // Store tokens
+      localStorage.setItem('access_token', accessToken)
+      localStorage.setItem('refresh_token', refreshToken)
+      setAuthToken(accessToken)
+      
+      // Get user info
+      const result = await getCurrentUser()
+      if (result.success && result.data) {
+        setUser(result.data)
+      } else {
+        // If we can't get user info, clear everything
+        console.error('Failed to get user after login:', result.error)
+        clearAuth()
+      }
+    } catch (err) {
+      console.error('Login error:', err)
+      clearAuth()
+    }
+  }, [clearAuth])
+
+  const logout = useCallback(() => {
+    clearAuth()
+    navigate('/login', { replace: true })
+  }, [clearAuth, navigate])
+
   // Check for existing token on mount
   useEffect(() => {
     const initAuth = async () => {
       const token = localStorage.getItem('access_token')
       
-      if (token) {
-        setAuthToken(token)
+      if (!token) {
+        setIsLoading(false)
+        return
+      }
+
+      setAuthToken(token)
+      
+      // Verify token is still valid
+      const result = await getCurrentUser()
+      
+      if (result.success && result.data) {
+        setUser(result.data)
+        setIsLoading(false)
+        return
+      }
+
+      // Token invalid, try to refresh
+      const refreshTokenStr = localStorage.getItem('refresh_token')
+      if (!refreshTokenStr) {
+        clearAuth()
+        setIsLoading(false)
+        return
+      }
+
+      const refreshResult = await refreshTokenApi(refreshTokenStr)
+      if (refreshResult.success && refreshResult.data) {
+        localStorage.setItem('access_token', refreshResult.data.accessToken)
+        localStorage.setItem('refresh_token', refreshResult.data.refreshToken)
+        setAuthToken(refreshResult.data.accessToken)
         
-        // Verify token is still valid
-        const result = await getCurrentUser()
-        
-        if (result.success && result.data) {
-          setUser(result.data)
+        // Try getting user again
+        const userResult = await getCurrentUser()
+        if (userResult.success && userResult.data) {
+          setUser(userResult.data)
         } else {
-          // Try to refresh token
-          const refreshTokenStr = localStorage.getItem('refresh_token')
-          if (refreshTokenStr) {
-            const refreshResult = await refreshTokenApi(refreshTokenStr)
-            if (refreshResult.success && refreshResult.data) {
-              localStorage.setItem('access_token', refreshResult.data.accessToken)
-              localStorage.setItem('refresh_token', refreshResult.data.refreshToken)
-              setAuthToken(refreshResult.data.accessToken)
-              
-              // Try getting user again
-              const userResult = await getCurrentUser()
-              if (userResult.success && userResult.data) {
-                setUser(userResult.data)
-              } else {
-                // Token refresh failed, clear auth
-                clearAuth()
-              }
-            } else {
-              clearAuth()
-            }
-          } else {
-            clearAuth()
-          }
+          clearAuth()
         }
+      } else {
+        clearAuth()
       }
       
       setIsLoading(false)
     }
 
     initAuth()
-  }, [])
+  }, [clearAuth])
 
   // Redirect to login if not authenticated and not on login page
   useEffect(() => {
@@ -83,30 +124,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       navigate('/login', { replace: true })
     }
   }, [isLoading, user, location.pathname, navigate])
-
-  const clearAuth = () => {
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('refresh_token')
-    clearAuthToken()
-    setUser(null)
-  }
-
-  const login = async (accessToken: string, refreshToken: string) => {
-    localStorage.setItem('access_token', accessToken)
-    localStorage.setItem('refresh_token', refreshToken)
-    setAuthToken(accessToken)
-    
-    // Get user info
-    const result = await getCurrentUser()
-    if (result.success && result.data) {
-      setUser(result.data)
-    }
-  }
-
-  const logout = () => {
-    clearAuth()
-    navigate('/login', { replace: true })
-  }
 
   return (
     <AuthContext.Provider
