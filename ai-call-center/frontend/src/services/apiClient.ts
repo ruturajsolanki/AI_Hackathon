@@ -37,11 +37,13 @@ export interface StartCallParams {
 }
 
 export interface StartCallResponse {
-  callId: string
+  interactionId: string  // Backend returns interaction_id → interactionId
+  callId?: string        // Alias for backwards compatibility
   status: string
   channel: string
   startedAt: string
   initialResponse: string | null
+  message?: string
 }
 
 export interface SendMessageParams {

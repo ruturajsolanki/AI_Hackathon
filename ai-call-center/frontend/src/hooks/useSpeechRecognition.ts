@@ -115,10 +115,14 @@ export function useSpeechRecognition(
   const [finalTranscript, setFinalTranscript] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [permissionDenied, setPermissionDenied] = useState(false)
+  
+  // This stores the LAST captured text - never cleared by state updates
+  const [capturedText, setCapturedText] = useState('')
 
   // Refs
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
   const isStoppingRef = useRef(false)
+  const lastCapturedRef = useRef('')
 
   // Check browser support
   const isSupported = typeof window !== 'undefined' && 
@@ -182,9 +186,20 @@ export function useSpeechRecognition(
       if (final) {
         setFinalTranscript(prev => prev + final)
         setTranscript(prev => prev + final)
+        // Save captured text
+        lastCapturedRef.current = final
+        setCapturedText(final)
+        console.log('[SpeechRecognition] 💾 Captured final text:', final)
       }
       
-      setInterimTranscript(interim)
+      // Only update interim if we have new text (don't clear with empty string)
+      if (interim) {
+        setInterimTranscript(interim)
+        // Also save interim as captured text
+        lastCapturedRef.current = interim
+        setCapturedText(interim)
+        console.log('[SpeechRecognition] 💾 Captured interim text:', interim)
+      }
     }
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
@@ -314,6 +329,7 @@ export function useSpeechRecognition(
     transcript,
     interimTranscript,
     finalTranscript,
+    capturedText,  // The last captured text (persists after recognition ends)
     error,
     permissionDenied,
     // Controls

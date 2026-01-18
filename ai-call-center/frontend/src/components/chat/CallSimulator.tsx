@@ -85,6 +85,7 @@ export function CallSimulator() {
     transcript,
     interimTranscript,
     finalTranscript,
+    capturedText,  // This persists after speech ends!
     error: speechError,
     permissionDenied,
     startListening,
@@ -139,18 +140,19 @@ export function CallSimulator() {
     }
   }, [speechError, permissionDenied])
 
-  // Update input field with live transcription while listening
+  // Track transcription and update input field for visual feedback
   useEffect(() => {
-    console.log('[Transcript Effect] isListening:', isListening, 'final:', finalTranscript, 'transcript:', transcript, 'interim:', interimTranscript)
-    if (isListening) {
-      const currentText = finalTranscript || transcript || interimTranscript
-      if (currentText && currentText.trim()) {
-        console.log('[Transcript Effect] Setting input to:', currentText.trim())
-        setInput(currentText.trim())
-        lastInterimRef.current = currentText.trim()
-      }
+    // Use capturedText (most reliable) or fall back to other transcripts
+    const currentText = capturedText || finalTranscript || transcript || interimTranscript
+    
+    if (currentText && currentText.trim()) {
+      const textToSave = currentText.trim()
+      lastInterimRef.current = textToSave
+      // Update input field so user can see it
+      setInput(textToSave)
+      console.log('[Transcript Tracker] Input updated to:', textToSave)
     }
-  }, [isListening, interimTranscript, transcript, finalTranscript])
+  }, [capturedText, interimTranscript, transcript, finalTranscript])
 
   // Stop TTS when call ends
   useEffect(() => {
@@ -314,6 +316,114 @@ export function CallSimulator() {
     }
   }, [callId, isCallActive, agentState.status, addMessage, speakResponse])
 
+  // Send a voice message directly (bypasses input state)
+  const sendVoiceMessage = useCallback(async (messageText: string) => {
+    if (!messageText.trim() || !callId) {
+      console.log('[sendVoiceMessage] Invalid - no text or no callId')
+      return
+    }
+
+    console.log('[sendVoiceMessage] Sending:', messageText)
+    
+    // Add customer message to UI
+    addMessage({
+      role: 'customer',
+      content: messageText,
+    })
+
+    // Set processing state
+    setAgentState(prev => ({ ...prev, status: 'processing' }))
+    setIsLoading(true)
+
+    const startTime = Date.now()
+
+    // Call API
+    const result = await sendMessage(callId, messageText)
+    
+    const processingTime = Date.now() - startTime
+    setIsLoading(false)
+
+    console.log('[sendVoiceMessage] API Response:', result)
+
+    if (result.success && result.data) {
+      const data = result.data
+      const confidenceLevel = getConfidenceLevel(data.confidenceLevel)
+      const confidenceScore = getConfidenceScore(data.confidenceLevel)
+
+      // Update agent state
+      setAgentState(prev => ({
+        ...prev,
+        status: 'speaking',
+        confidence: confidenceScore,
+        confidenceLevel,
+        intent: 'detected',
+        emotion: 'analyzed',
+        shouldEscalate: data.shouldEscalate,
+        escalationReason: data.escalationReason || undefined,
+        escalationType: data.escalationType || undefined,
+        turnCount: prev.turnCount + 1,
+      }))
+
+      // Add agent response
+      if (data.responseContent) {
+        addMessage({
+          role: 'agent',
+          content: data.responseContent,
+          metadata: {
+            confidence: confidenceScore,
+            processingTime,
+          },
+        })
+
+        // Speak the response
+        await speakResponse(data.responseContent)
+      }
+
+      // Handle escalation
+      if (data.shouldEscalate) {
+        addMessage({
+          role: 'system',
+          content: `⚠️ Escalation triggered: ${data.escalationReason || 'Complex issue detected'}`,
+        })
+      }
+
+    } else {
+      setError(result.error?.message || 'Failed to send message')
+      setAgentState(prev => ({ ...prev, status: 'listening' }))
+      addMessage({
+        role: 'error',
+        content: `Error: ${result.error?.message || 'Failed to process message'}`,
+      })
+    }
+  }, [callId, addMessage, speakResponse, getConfidenceLevel, getConfidenceScore])
+
+  // Auto-send when speech recognition stops (naturally or by clicking mic)
+  useEffect(() => {
+    console.log('[Auto-send Effect] isListening:', isListening, 'wasListening:', wasListeningRef.current, 'capturedText:', capturedText)
+    
+    // Detect when isListening changes from true to false
+    if (wasListeningRef.current && !isListening) {
+      // Speech just stopped - use capturedText (most reliable) or fallback to input/ref
+      const textToSend = capturedText || lastInterimRef.current || input
+      console.log('[Auto-send Effect] Speech stopped! Text to send:', textToSend)
+      console.log('[Auto-send Effect] Conditions - isCallActive:', isCallActive, 'callId:', callId, 'status:', agentState.status)
+      
+      if (textToSend && textToSend.trim() && isCallActive && callId && agentState.status !== 'processing') {
+        console.log('[Auto-send Effect] ✅ SENDING MESSAGE:', textToSend.trim())
+        sendVoiceMessage(textToSend.trim())
+        // Clear after sending
+        setTimeout(() => {
+          lastInterimRef.current = ''
+          setInput('')
+          clearTranscript()
+        }, 100)
+      } else {
+        console.log('[Auto-send Effect] ❌ Not sending - conditions not met')
+      }
+    }
+    wasListeningRef.current = isListening
+  }, [isListening, isCallActive, callId, agentState.status, sendVoiceMessage, clearTranscript, input, capturedText])
+
   const toggleMicrophone = useCallback(() => {
     if (!isSTTSupported) {
       setError('Speech recognition is not supported in this browser.')
@@ -321,21 +431,34 @@ export function CallSimulator() {
     }
 
     if (isListening) {
-      // Stopping - the input already has the text from the effect
-      console.log('[Mic] Stopping. Text in input:', input)
+      // STOPPING - grab the text from ref and auto-send
+      const textToSend = lastInterimRef.current
+      console.log('[Mic] Stopping. Text to send:', textToSend)
+      
       stopListening()
+      
+      if (textToSend && textToSend.trim() && isCallActive && callId) {
+        const message = textToSend.trim()
+        console.log('[Mic] Auto-sending message:', message)
+        // Call handleSendMessage with the text directly
+        sendVoiceMessage(message)
+      } else {
+        console.log('[Mic] No text to send or call not active')
+      }
+      
       clearTranscript()
-      // Don't clear input - user will click Send
+      lastInterimRef.current = ''
+      setInput('')
     } else {
-      // Starting
+      // STARTING
       stopSpeech()
       clearTranscript()
       lastInterimRef.current = ''
-      setInput('') // Clear input when starting fresh
+      setInput('')
       startListening()
       console.log('[Mic] Started listening')
     }
-  }, [isSTTSupported, isListening, startListening, stopListening, clearTranscript, input])
+  }, [isSTTSupported, isListening, startListening, stopListening, clearTranscript, isCallActive, callId])
 
   const toggleTTS = useCallback(() => {
     if (!ttsEnabled) {
@@ -346,7 +469,8 @@ export function CallSimulator() {
     }
   }, [ttsEnabled])
 
-  // No auto-send - user will click Send button after voice input
+  // wasListeningRef is used to detect when speech stops
+  const wasListeningRef = useRef(false)
 
   // ---------------------------------------------------------------------------
   // API Handlers
@@ -370,7 +494,10 @@ export function CallSimulator() {
     setIsLoading(false)
 
     if (result.success && result.data) {
-      const { callId: newCallId, initialResponse } = result.data
+      // Backend returns interactionId (transformed from interaction_id)
+      const newCallId = (result.data as any).interactionId || (result.data as any).callId
+      const initialResponse = result.data.initialResponse
+      console.log('[StartCall] Response:', result.data, 'Using callId:', newCallId)
       setCallId(newCallId)
       
       // Clear connecting message and add success
