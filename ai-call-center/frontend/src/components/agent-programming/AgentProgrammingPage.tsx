@@ -59,9 +59,29 @@ export function AgentProgrammingPage() {
       const response = await fetch(`${API_BASE}/api/agent-config`)
       if (response.ok) {
         const data = await response.json()
-        setAgents(data)
-        if (!selectedAgent && data.length > 0) {
-          setSelectedAgent(data[0].agentId)
+        // Transform snake_case to camelCase
+        const transformedAgents: AgentConfig[] = data.map((agent: Record<string, unknown>) => ({
+          agentId: agent.agent_id as string,
+          agentName: agent.agent_name as string,
+          agentType: agent.agent_type as 'primary' | 'supervisor' | 'escalation',
+          description: agent.description as string,
+          model: agent.model as string,
+          temperature: agent.temperature as number,
+          confidenceThreshold: agent.confidence_threshold as number,
+          isCustom: agent.is_custom as boolean,
+          version: agent.version as number,
+          updatedAt: agent.updated_at as string,
+          // These are only in detail view, but we need defaults
+          systemPrompt: '',
+          userPromptTemplate: '',
+          outputSchema: {},
+          maxTokens: 1024,
+          topP: 1.0,
+          fallbackEnabled: true,
+        }))
+        setAgents(transformedAgents)
+        if (!selectedAgent && transformedAgents.length > 0) {
+          setSelectedAgent(transformedAgents[0].agentId)
         }
       }
     } catch (e) {
