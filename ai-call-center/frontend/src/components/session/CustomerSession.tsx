@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import styles from './CustomerSession.module.css'
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition'
-import { speak, stopSpeech } from '../../utils/speechSynthesis'
+import { speak, stop as stopSpeech } from '../../utils/speechSynthesis'
 
 interface Message {
   id: string
