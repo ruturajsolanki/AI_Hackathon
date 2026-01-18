@@ -42,7 +42,6 @@ export function AgentsPage() {
   }, [])
 
   const handleAgentClick = useCallback(async (agentId: string) => {
-    // Toggle off if already selected
     if (selectedAgent?.agent.agentId === agentId) {
       setSelectedAgent(null)
       return
@@ -76,37 +75,36 @@ export function AgentsPage() {
     }
   }
 
-  const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 0.8) return '#10b981'
-    if (confidence >= 0.6) return '#f59e0b'
-    return '#ef4444'
+  const getTypeClass = (type: string) => {
+    switch (type) {
+      case 'primary': return styles.typePrimary
+      case 'supervisor': return styles.typeSupervisor
+      case 'escalation': return styles.typeEscalation
+      default: return ''
+    }
   }
 
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString)
-    return new Intl.DateTimeFormat('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(date)
-  }
-
+  // Loading State
   if (isLoading) {
     return (
-      <div className={styles.loadingContainer}>
-        <div className={styles.spinner} />
-        <span>Loading agents...</span>
+      <div className={styles.container}>
+        <div className={styles.loading}>
+          <div className={styles.spinner} />
+          <span>Loading agents...</span>
+        </div>
       </div>
     )
   }
 
+  // Error State
   if (error) {
     return (
-      <div className={styles.errorContainer}>
-        <span className={styles.errorIcon}>⚠️</span>
-        <h2>Failed to load agents</h2>
-        <p>{error}</p>
+      <div className={styles.container}>
+        <div className={styles.error}>
+          <span className={styles.errorIcon}>⚠️</span>
+          <h2>Failed to load agents</h2>
+          <p>{error}</p>
+        </div>
       </div>
     )
   }
@@ -115,44 +113,46 @@ export function AgentsPage() {
     <div className={styles.container}>
       {/* Header */}
       <header className={styles.header}>
-        <div className={styles.headerContent}>
-          <h1 className={styles.title}>AI Agents</h1>
-          <p className={styles.subtitle}>
-            Autonomous agents powering the call center with transparent, explainable decisions
-          </p>
-        </div>
+        <h1>AI Agents</h1>
+        <p>Autonomous agents powering the call center with transparent, explainable decisions</p>
       </header>
 
-      {/* Agent Cards */}
-      <div className={styles.agentGrid}>
+      {/* Agent Grid */}
+      <div className={styles.grid}>
         {agents.map((agent) => (
           <div
             key={agent.agentId}
-            className={`${styles.agentCard} ${selectedAgent?.agent.agentId === agent.agentId ? styles.selected : ''}`}
+            className={`${styles.card} ${selectedAgent?.agent.agentId === agent.agentId ? styles.selected : ''}`}
             onClick={() => handleAgentClick(agent.agentId)}
-            style={{ '--agent-color': getAgentColor(agent.type) } as React.CSSProperties}
           >
             {/* Card Header */}
             <div className={styles.cardHeader}>
-              <div className={styles.agentIcon}>{getAgentIcon(agent.type)}</div>
-              <div className={styles.agentInfo}>
-                <h3 className={styles.agentName}>{agent.name}</h3>
-                <span className={styles.agentType}>{agent.type} agent</span>
-              </div>
-              <span 
-                className={styles.statusBadge}
-                style={{ backgroundColor: agent.status === 'active' ? '#10b98120' : '#6b728020' }}
+              <div 
+                className={styles.iconWrapper}
+                style={{ backgroundColor: `${getAgentColor(agent.type)}20` }}
               >
-                <span 
-                  className={styles.statusDot}
-                  style={{ backgroundColor: agent.status === 'active' ? '#10b981' : '#6b7280' }}
-                />
-                {agent.status}
-              </span>
+                {getAgentIcon(agent.type)}
+              </div>
+              <div className={styles.cardTitle}>
+                <h3>{agent.name}</h3>
+                <span className={`${styles.cardType} ${getTypeClass(agent.type)}`}>
+                  {agent.type}
+                </span>
+              </div>
             </div>
 
             {/* Description */}
             <p className={styles.description}>{agent.description}</p>
+
+            {/* Responsibilities */}
+            <div className={styles.responsibilities}>
+              <div className={styles.responsibilitiesTitle}>Responsibilities</div>
+              <div className={styles.responsibilityList}>
+                {agent.responsibilities.slice(0, 3).map((resp, i) => (
+                  <span key={i} className={styles.responsibility}>{resp}</span>
+                ))}
+              </div>
+            </div>
 
             {/* Metrics */}
             <div className={styles.metrics}>
@@ -161,131 +161,46 @@ export function AgentsPage() {
                 <span className={styles.metricLabel}>Decisions</span>
               </div>
               <div className={styles.metric}>
-                <span 
-                  className={styles.metricValue}
-                  style={{ color: getConfidenceColor(agent.metrics.averageConfidence) }}
-                >
+                <span className={styles.metricValue}>
                   {(agent.metrics.averageConfidence * 100).toFixed(0)}%
                 </span>
                 <span className={styles.metricLabel}>Avg Confidence</span>
               </div>
             </div>
 
-            {/* Decision Scope */}
-            <div className={styles.scopeSection}>
-              <h4 className={styles.scopeTitle}>Decision Scope</h4>
-              <div className={styles.scopeGrid}>
-                <div className={styles.scopeColumn}>
-                  <span className={styles.scopeLabel}>
-                    <span className={styles.scopeIcon}>✓</span> Autonomous
-                  </span>
-                  <ul className={styles.scopeList}>
-                    {agent.decisionScope.autonomousActions.slice(0, 2).map((action, i) => (
-                      <li key={i}>{action}</li>
-                    ))}
-                    {agent.decisionScope.autonomousActions.length > 2 && (
-                      <li className={styles.moreItems}>
-                        +{agent.decisionScope.autonomousActions.length - 2} more
-                      </li>
+            {/* Expanded Details */}
+            {selectedAgent?.agent.agentId === agent.agentId && (
+              <div className={styles.details}>
+                {isLoadingDetail ? (
+                  <div className={styles.detailsLoading}>Loading decisions...</div>
+                ) : (
+                  <>
+                    <div className={styles.decisionsTitle}>Recent Decisions</div>
+                    {selectedAgent.recentDecisions.length === 0 ? (
+                      <div className={styles.noDecisions}>No recent decisions</div>
+                    ) : (
+                      <div className={styles.decisionsList}>
+                        {selectedAgent.recentDecisions.map((decision, i) => (
+                          <DecisionItem key={i} decision={decision} />
+                        ))}
+                      </div>
                     )}
-                  </ul>
-                </div>
-                <div className={styles.scopeColumn}>
-                  <span className={styles.scopeLabel}>
-                    <span className={styles.scopeIcon}>⚠️</span> Requires Review
-                  </span>
-                  <ul className={styles.scopeList}>
-                    {agent.decisionScope.requiresReview.slice(0, 2).map((action, i) => (
-                      <li key={i}>{action}</li>
-                    ))}
-                    {agent.decisionScope.requiresReview.length > 2 && (
-                      <li className={styles.moreItems}>
-                        +{agent.decisionScope.requiresReview.length - 2} more
-                      </li>
-                    )}
-                  </ul>
-                </div>
+                  </>
+                )}
               </div>
-            </div>
-
-            {/* Click hint */}
-            <div className={styles.clickHint}>
-              {selectedAgent?.agent.agentId === agent.agentId 
-                ? 'Click to collapse' 
-                : 'Click to view recent decisions'}
-            </div>
+            )}
           </div>
         ))}
       </div>
-
-      {/* Recent Decisions Panel */}
-      {selectedAgent && (
-        <div className={styles.decisionsPanel}>
-          <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>
-              {getAgentIcon(selectedAgent.agent.type)} {selectedAgent.agent.name}
-              <span className={styles.panelSubtitle}>Recent Decisions</span>
-            </h2>
-            <button 
-              className={styles.closeButton}
-              onClick={() => setSelectedAgent(null)}
-              aria-label="Close panel"
-            >
-              ×
-            </button>
-          </div>
-
-          {isLoadingDetail ? (
-            <div className={styles.panelLoading}>
-              <div className={styles.spinner} />
-              <span>Loading decisions...</span>
-            </div>
-          ) : selectedAgent.recentDecisions.length === 0 ? (
-            <div className={styles.emptyDecisions}>
-              No recent decisions recorded
-            </div>
-          ) : (
-            <div className={styles.decisionsList}>
-              {selectedAgent.recentDecisions.map((decision, index) => (
-                <DecisionCard key={index} decision={decision} />
-              ))}
-            </div>
-          )}
-
-          {/* Capabilities */}
-          <div className={styles.capabilitiesSection}>
-            <h3 className={styles.sectionTitle}>Capabilities</h3>
-            <div className={styles.capabilitiesGrid}>
-              {selectedAgent.agent.capabilities.map((cap, i) => (
-                <div key={i} className={styles.capabilityCard}>
-                  <span className={styles.capabilityName}>{cap.name}</span>
-                  <span className={styles.capabilityDesc}>{cap.description}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Responsibilities */}
-          <div className={styles.responsibilitiesSection}>
-            <h3 className={styles.sectionTitle}>Responsibilities</h3>
-            <ul className={styles.responsibilitiesList}>
-              {selectedAgent.agent.responsibilities.map((resp, i) => (
-                <li key={i}>{resp}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
 
-// Decision Card Component
-function DecisionCard({ decision }: { decision: AnonymizedDecision }) {
-  const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 0.8) return '#10b981'
-    if (confidence >= 0.6) return '#f59e0b'
-    return '#ef4444'
+function DecisionItem({ decision }: { decision: AnonymizedDecision }) {
+  const getConfidenceClass = (confidence: number) => {
+    if (confidence >= 0.8) return styles.confidenceHigh
+    if (confidence >= 0.6) return styles.confidenceMedium
+    return styles.confidenceLow
   }
 
   const formatTime = (dateString: string) => {
@@ -299,23 +214,13 @@ function DecisionCard({ decision }: { decision: AnonymizedDecision }) {
   }
 
   return (
-    <div className={styles.decisionCard}>
-      <div className={styles.decisionHeader}>
-        <span className={styles.decisionType}>{decision.decisionType}</span>
-        <span className={styles.decisionTime}>{formatTime(decision.timestamp)}</span>
-      </div>
-      <p className={styles.decisionSummary}>{decision.summary}</p>
+    <div className={styles.decisionItem}>
+      <span className={styles.decisionSummary}>{decision.summary}</span>
       <div className={styles.decisionMeta}>
-        <span 
-          className={styles.confidenceBadge}
-          style={{ 
-            backgroundColor: `${getConfidenceColor(decision.confidence)}20`,
-            color: getConfidenceColor(decision.confidence),
-          }}
-        >
-          {(decision.confidence * 100).toFixed(0)}% confidence
+        <span className={`${styles.confidence} ${getConfidenceClass(decision.confidence)}`}>
+          {(decision.confidence * 100).toFixed(0)}%
         </span>
-        <span className={styles.processingTime}>⚡ {decision.processingTimeMs}ms</span>
+        <span className={styles.decisionTime}>{formatTime(decision.timestamp)}</span>
       </div>
     </div>
   )

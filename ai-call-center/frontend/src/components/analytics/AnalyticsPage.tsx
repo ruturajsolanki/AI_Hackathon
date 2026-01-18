@@ -57,19 +57,23 @@ export function AnalyticsPage() {
 
   if (isLoading) {
     return (
-      <div className={styles.loadingContainer}>
-        <div className={styles.spinner} />
-        <span>Loading analytics...</span>
+      <div className={styles.container}>
+        <div className={styles.loadingContainer}>
+          <div className={styles.spinner} />
+          <span>Loading analytics...</span>
+        </div>
       </div>
     )
   }
 
   if (error || !overview) {
     return (
-      <div className={styles.errorContainer}>
-        <span className={styles.errorIcon}>⚠️</span>
-        <h2>Failed to load analytics</h2>
-        <p>{error || 'No data available'}</p>
+      <div className={styles.container}>
+        <div className={styles.errorContainer}>
+          <span className={styles.errorIcon}>⚠️</span>
+          <h2>Failed to load analytics</h2>
+          <p>{error || 'No data available'}</p>
+        </div>
       </div>
     )
   }
@@ -80,276 +84,219 @@ export function AnalyticsPage() {
     <div className={styles.container}>
       {/* Header */}
       <header className={styles.header}>
-        <div className={styles.headerContent}>
-          <h1 className={styles.title}>Analytics Dashboard</h1>
-          <p className={styles.subtitle}>
-            AI Call Center performance metrics and insights
-          </p>
+        <div className={styles.headerText}>
+          <h1>Analytics</h1>
+          <p>AI call center performance metrics and insights</p>
         </div>
         <div className={styles.periodSelector}>
-          <label htmlFor="period">Period:</label>
-          <select
-            id="period"
-            value={days}
-            onChange={(e) => setDays(Number(e.target.value))}
-            className={styles.select}
+          <button 
+            className={`${styles.periodBtn} ${days === 7 ? styles.active : ''}`}
+            onClick={() => setDays(7)}
           >
-            <option value={7}>Last 7 days</option>
-            <option value={14}>Last 14 days</option>
-            <option value={30}>Last 30 days</option>
-          </select>
+            7 Days
+          </button>
+          <button 
+            className={`${styles.periodBtn} ${days === 14 ? styles.active : ''}`}
+            onClick={() => setDays(14)}
+          >
+            14 Days
+          </button>
+          <button 
+            className={`${styles.periodBtn} ${days === 30 ? styles.active : ''}`}
+            onClick={() => setDays(30)}
+          >
+            30 Days
+          </button>
         </div>
       </header>
 
-      {/* Key Metrics Cards */}
-      <section className={styles.metricsSection}>
-        <h2 className={styles.sectionTitle}>Key Metrics</h2>
-        <div className={styles.metricsGrid}>
-          <MetricCard
-            label="Total Calls"
-            value={summary.totalInteractions}
-            icon="📞"
-            description="Total interactions received"
-          />
-          <MetricCard
-            label="AI Resolution Rate"
-            value={formatPercentage(summary.resolutionRate)}
-            icon="✅"
-            description="Resolved without human intervention"
-            highlight={summary.resolutionRate > 0.7 ? 'success' : 'warning'}
-          />
-          <MetricCard
-            label="Escalation Rate"
-            value={formatPercentage(summary.escalationRate)}
-            icon="⬆️"
-            description="Escalated to human agents"
-            highlight={summary.escalationRate < 0.3 ? 'success' : 'warning'}
-          />
-          <MetricCard
-            label="AI Confidence"
-            value={formatPercentage(summary.averageConfidence)}
-            icon="🎯"
-            description="Average agent confidence score"
-            highlight={summary.averageConfidence > 0.7 ? 'success' : 'warning'}
-          />
-          <MetricCard
-            label="Avg Duration"
-            value={formatDuration(summary.averageDurationSeconds)}
-            icon="⏱️"
-            description="Average call duration"
-          />
-          <MetricCard
-            label="Active Calls"
-            value={summary.activeInteractions}
-            icon="🔄"
-            description="Currently in progress"
-          />
+      {/* Metrics Grid */}
+      <div className={styles.metricsGrid}>
+        <div className={styles.metricCard}>
+          <div className={styles.metricHeader}>
+            <div className={`${styles.metricIcon} ${styles.metricIconBlue}`}>📞</div>
+            <span className={`${styles.metricTrend} ${styles.trendNeutral}`}>Last {days} days</span>
+          </div>
+          <div className={styles.metricValue}>{summary.totalInteractions}</div>
+          <div className={styles.metricLabel}>Total Calls</div>
         </div>
-      </section>
 
-      {/* Trend Chart */}
-      {trends && trends.daily.length > 0 && (
-        <section className={styles.chartSection}>
-          <h2 className={styles.sectionTitle}>Call Volume Trend</h2>
-          <p className={styles.chartDescription}>
-            Daily call volume over the selected period
-          </p>
-          <TrendChart data={trends.daily} />
-        </section>
-      )}
-
-      {/* Breakdowns */}
-      <div className={styles.breakdownsGrid}>
-        {/* Channel Breakdown */}
-        <section className={styles.breakdownCard}>
-          <h3 className={styles.breakdownTitle}>By Channel</h3>
-          <div className={styles.breakdownList}>
-            {overview.channelBreakdown.map((item) => (
-              <div key={item.channel} className={styles.breakdownItem}>
-                <div className={styles.breakdownLabel}>
-                  <span className={styles.channelIcon}>
-                    {item.channel === 'voice' ? '🎙️' : '💬'}
-                  </span>
-                  <span>{item.channel}</span>
-                </div>
-                <div className={styles.breakdownValue}>
-                  <span className={styles.count}>{item.count}</span>
-                  <span className={styles.percentage}>{item.percentage}%</span>
-                </div>
-                <div className={styles.progressBar}>
-                  <div 
-                    className={styles.progressFill}
-                    style={{ width: `${item.percentage}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+        <div className={styles.metricCard}>
+          <div className={styles.metricHeader}>
+            <div className={`${styles.metricIcon} ${styles.metricIconGreen}`}>✓</div>
+            <span className={`${styles.metricTrend} ${styles.trendUp}`}>
+              {formatPercentage(summary.resolutionRate)}
+            </span>
           </div>
-        </section>
+          <div className={styles.metricValue}>{summary.resolvedCount}</div>
+          <div className={styles.metricLabel}>Resolved by AI</div>
+        </div>
 
-        {/* Status Breakdown */}
-        <section className={styles.breakdownCard}>
-          <h3 className={styles.breakdownTitle}>By Status</h3>
-          <div className={styles.breakdownList}>
-            {overview.statusBreakdown.map((item) => (
-              <div key={item.status} className={styles.breakdownItem}>
-                <div className={styles.breakdownLabel}>
-                  <span className={styles.statusDot} data-status={item.status} />
-                  <span>{item.status.replace(/_/g, ' ')}</span>
-                </div>
-                <div className={styles.breakdownValue}>
-                  <span className={styles.count}>{item.count}</span>
-                  <span className={styles.percentage}>{item.percentage}%</span>
-                </div>
-                <div className={styles.progressBar}>
-                  <div 
-                    className={`${styles.progressFill} ${styles[item.status]}`}
-                    style={{ width: `${item.percentage}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+        <div className={styles.metricCard}>
+          <div className={styles.metricHeader}>
+            <div className={`${styles.metricIcon} ${styles.metricIconOrange}`}>↗</div>
+            <span className={`${styles.metricTrend} ${styles.trendDown}`}>
+              {formatPercentage(summary.escalationRate)}
+            </span>
           </div>
-        </section>
+          <div className={styles.metricValue}>{summary.escalatedCount}</div>
+          <div className={styles.metricLabel}>Escalated</div>
+        </div>
 
-        {/* Agent Performance */}
-        <section className={styles.breakdownCard}>
-          <h3 className={styles.breakdownTitle}>Agent Performance</h3>
-          <div className={styles.agentList}>
-            {overview.agentPerformance.map((agent) => (
-              <div key={agent.agentType} className={styles.agentItem}>
-                <div className={styles.agentHeader}>
-                  <span className={styles.agentIcon}>
-                    {agent.agentType === 'primary' ? '🤖' : 
-                     agent.agentType === 'supervisor' ? '👁️' : '⚡'}
-                  </span>
-                  <span className={styles.agentName}>
-                    {agent.agentType.charAt(0).toUpperCase() + agent.agentType.slice(1)}
-                  </span>
-                </div>
-                <div className={styles.agentStats}>
-                  <div className={styles.agentStat}>
-                    <span className={styles.statValue}>{agent.totalDecisions}</span>
-                    <span className={styles.statLabel}>Decisions</span>
-                  </div>
-                  <div className={styles.agentStat}>
-                    <span className={styles.statValue}>
-                      {(agent.averageConfidence * 100).toFixed(0)}%
-                    </span>
-                    <span className={styles.statLabel}>Confidence</span>
-                  </div>
-                  <div className={styles.agentStat}>
-                    <span className={styles.statValue}>{agent.averageProcessingMs}ms</span>
-                    <span className={styles.statLabel}>Avg Time</span>
-                  </div>
-                </div>
-              </div>
-            ))}
+        <div className={styles.metricCard}>
+          <div className={styles.metricHeader}>
+            <div className={`${styles.metricIcon} ${styles.metricIconPurple}`}>⏱</div>
           </div>
-        </section>
+          <div className={styles.metricValue}>{formatDuration(summary.averageDurationSeconds)}</div>
+          <div className={styles.metricLabel}>Avg Duration</div>
+        </div>
       </div>
 
-      {/* Hourly Distribution */}
-      <section className={styles.hourlySection}>
-        <h2 className={styles.sectionTitle}>Hourly Distribution</h2>
-        <p className={styles.chartDescription}>
-          Call volume by hour of day
-        </p>
-        <HourlyChart data={overview.callsPerHour} />
-      </section>
-    </div>
-  )
-}
+      {/* Charts Section */}
+      <div className={styles.chartsSection}>
+        {/* Call Volume Trend */}
+        <div className={styles.chartCard}>
+          <h3 className={styles.chartTitle}>Call Volume Trend</h3>
+          <div className={styles.chartArea}>
+            {trends?.dailyTrends.map((day, i) => (
+              <BarGroup key={i} day={day} maxCalls={Math.max(...trends.dailyTrends.map(d => d.totalCalls))} />
+            ))}
+          </div>
+        </div>
 
-// Metric Card Component
-function MetricCard({ 
-  label, 
-  value, 
-  icon, 
-  description, 
-  highlight 
-}: { 
-  label: string
-  value: string | number
-  icon: string
-  description: string
-  highlight?: 'success' | 'warning' | 'danger'
-}) {
-  return (
-    <div className={`${styles.metricCard} ${highlight ? styles[highlight] : ''}`}>
-      <div className={styles.metricIcon}>{icon}</div>
-      <div className={styles.metricContent}>
-        <span className={styles.metricValue}>{value}</span>
-        <span className={styles.metricLabel}>{label}</span>
-        <span className={styles.metricDescription}>{description}</span>
-      </div>
-    </div>
-  )
-}
-
-// Simple Trend Chart Component (CSS-only)
-function TrendChart({ data }: { data: DailyTrendItem[] }) {
-  const maxValue = Math.max(...data.map(d => d.total), 1)
-  
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr)
-    return new Intl.DateTimeFormat('en-US', { 
-      month: 'short', 
-      day: 'numeric' 
-    }).format(date)
-  }
-
-  return (
-    <div className={styles.trendChart}>
-      <div className={styles.chartBars}>
-        {data.map((item, index) => (
-          <div key={index} className={styles.barColumn}>
-            <div className={styles.barContainer}>
-              <div 
-                className={styles.bar}
-                style={{ height: `${(item.total / maxValue) * 100}%` }}
-              >
-                <span className={styles.barValue}>{item.total}</span>
+        {/* Resolution Distribution */}
+        <div className={styles.chartCard}>
+          <h3 className={styles.chartTitle}>Resolution Distribution</h3>
+          <div className={styles.donutContainer}>
+            <DonutChart 
+              resolved={summary.resolvedCount} 
+              escalated={summary.escalatedCount}
+              other={summary.totalInteractions - summary.resolvedCount - summary.escalatedCount}
+            />
+            <div className={styles.donutLegend}>
+              <div className={styles.legendItem}>
+                <span className={styles.legendDot} style={{ background: '#10b981' }} />
+                <span className={styles.legendText}>Resolved</span>
+              </div>
+              <div className={styles.legendItem}>
+                <span className={styles.legendDot} style={{ background: '#f59e0b' }} />
+                <span className={styles.legendText}>Escalated</span>
+              </div>
+              <div className={styles.legendItem}>
+                <span className={styles.legendDot} style={{ background: '#6366f1' }} />
+                <span className={styles.legendText}>In Progress</span>
               </div>
             </div>
-            <span className={styles.barLabel}>{formatDate(item.date)}</span>
           </div>
-        ))}
+        </div>
       </div>
-      <div className={styles.chartLegend}>
-        <span className={styles.legendItem}>
-          <span className={styles.legendDot} /> Total Calls
-        </span>
+
+      {/* Performance Table */}
+      <div className={styles.tableSection}>
+        <h3 className={styles.tableTitle}>Agent Performance Summary</h3>
+        <table className={styles.simpleTable}>
+          <thead>
+            <tr>
+              <th>Agent</th>
+              <th>Decisions</th>
+              <th>Avg Confidence</th>
+              <th>Avg Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {overview.agentPerformance.map((agent, i) => (
+              <tr key={i}>
+                <td>{agent.agentType}</td>
+                <td>{agent.totalDecisions}</td>
+                <td>{formatPercentage(agent.averageConfidence)}</td>
+                <td>{agent.averageProcessingTime}ms</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   )
 }
 
-// Hourly Chart Component
-function HourlyChart({ data }: { data: { hour: number; count: number }[] }) {
-  const maxValue = Math.max(...data.map(d => d.count), 1)
-  
-  const formatHour = (hour: number) => {
-    if (hour === 0) return '12am'
-    if (hour === 12) return '12pm'
-    return hour < 12 ? `${hour}am` : `${hour - 12}pm`
-  }
+// Bar chart component
+function BarGroup({ day, maxCalls }: { day: DailyTrendItem; maxCalls: number }) {
+  const height = maxCalls > 0 ? (day.totalCalls / maxCalls) * 180 : 0
+  const date = new Date(day.date)
+  const label = new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(date)
 
   return (
-    <div className={styles.hourlyChart}>
-      <div className={styles.hourlyBars}>
-        {data.map((item) => (
-          <div key={item.hour} className={styles.hourlyColumn}>
-            <div 
-              className={styles.hourlyBar}
-              style={{ height: `${(item.count / maxValue) * 100}%` }}
-              title={`${formatHour(item.hour)}: ${item.count} calls`}
-            />
-            {item.hour % 3 === 0 && (
-              <span className={styles.hourlyLabel}>{formatHour(item.hour)}</span>
-            )}
-          </div>
-        ))}
+    <div className={styles.barGroup}>
+      <div 
+        className={styles.bar} 
+        style={{ height: `${Math.max(height, 4)}px` }}
+        title={`${day.totalCalls} calls`}
+      />
+      <span className={styles.barLabel}>{label}</span>
+    </div>
+  )
+}
+
+// Donut chart component
+function DonutChart({ resolved, escalated, other }: { resolved: number; escalated: number; other: number }) {
+  const total = resolved + escalated + other
+  if (total === 0) {
+    return (
+      <div className={styles.donutChart}>
+        <svg width="160" height="160" viewBox="0 0 160 160">
+          <circle cx="80" cy="80" r="60" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="20" />
+        </svg>
+        <div className={styles.donutCenter}>
+          <span className={styles.donutValue}>0</span>
+          <span className={styles.donutLabel}>calls</span>
+        </div>
+      </div>
+    )
+  }
+
+  const resolvedPct = (resolved / total) * 100
+  const escalatedPct = (escalated / total) * 100
+  
+  // Calculate stroke dash arrays for donut segments
+  const circumference = 2 * Math.PI * 60
+  const resolvedDash = (resolvedPct / 100) * circumference
+  const escalatedDash = (escalatedPct / 100) * circumference
+  const otherDash = circumference - resolvedDash - escalatedDash
+
+  return (
+    <div className={styles.donutChart}>
+      <svg width="160" height="160" viewBox="0 0 160 160">
+        {/* Resolved */}
+        <circle 
+          cx="80" cy="80" r="60" 
+          fill="none" 
+          stroke="#10b981" 
+          strokeWidth="20"
+          strokeDasharray={`${resolvedDash} ${circumference - resolvedDash}`}
+          strokeDashoffset="0"
+        />
+        {/* Escalated */}
+        <circle 
+          cx="80" cy="80" r="60" 
+          fill="none" 
+          stroke="#f59e0b" 
+          strokeWidth="20"
+          strokeDasharray={`${escalatedDash} ${circumference - escalatedDash}`}
+          strokeDashoffset={-resolvedDash}
+        />
+        {/* Other */}
+        <circle 
+          cx="80" cy="80" r="60" 
+          fill="none" 
+          stroke="#6366f1" 
+          strokeWidth="20"
+          strokeDasharray={`${otherDash} ${circumference - otherDash}`}
+          strokeDashoffset={-(resolvedDash + escalatedDash)}
+        />
+      </svg>
+      <div className={styles.donutCenter}>
+        <span className={styles.donutValue}>{total}</span>
+        <span className={styles.donutLabel}>calls</span>
       </div>
     </div>
   )
