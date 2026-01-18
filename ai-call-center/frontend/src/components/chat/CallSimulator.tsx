@@ -772,20 +772,23 @@ export function CallSimulator() {
 
       // Handle escalation automatically - no manual button needed
       if (data.shouldEscalate && !isEscalated) {
+        // IMMEDIATELY stop listening to prevent more messages
+        stopSpeech()
+        stopListening()
+        setContinuousVoiceMode(false)
+        
         addMessage({
           role: 'system',
           content: `⚠️ Escalation triggered: ${data.escalationReason || 'Complex issue detected'}`,
         })
         
-        // Auto-transfer to human agent after brief notification
-        setTimeout(() => {
-          addMessage({
-            role: 'system',
-            content: '🔄 Automatically transferring to human agent...',
-          })
-          // Trigger the escalation
-          handleEscalateToHuman()
-        }, 2000)
+        addMessage({
+          role: 'system',
+          content: '🔄 Transferring to human agent...',
+        })
+        
+        // Trigger the escalation immediately
+        handleEscalateToHuman()
       }
 
     } else {

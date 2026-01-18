@@ -288,6 +288,42 @@ export function TicketsDashboard() {
               ) : null}
             </div>
 
+            {/* Customer Session Link */}
+            <section className={styles.detailSection}>
+              <h3>📱 Customer Session</h3>
+              <p className={styles.sessionHint}>
+                Share this link with the customer to continue the conversation:
+              </p>
+              <div className={styles.sessionLinkRow}>
+                <input
+                  type="text"
+                  readOnly
+                  value={`${window.location.origin}/customer-session/${selectedTicket.interaction_id}`}
+                  className={styles.sessionLinkInput}
+                />
+                <button
+                  className={styles.copyButton}
+                  onClick={() => {
+                    navigator.clipboard.writeText(
+                      `${window.location.origin}/customer-session/${selectedTicket.interaction_id}`
+                    )
+                    alert('Link copied!')
+                  }}
+                >
+                  Copy
+                </button>
+                <button
+                  className={styles.openButton}
+                  onClick={() => window.open(
+                    `${window.location.origin}/customer-session/${selectedTicket.interaction_id}`,
+                    '_blank'
+                  )}
+                >
+                  Open
+                </button>
+              </div>
+            </section>
+
             {/* Issue Summary */}
             <section className={styles.detailSection}>
               <h3>📋 Issue Summary</h3>

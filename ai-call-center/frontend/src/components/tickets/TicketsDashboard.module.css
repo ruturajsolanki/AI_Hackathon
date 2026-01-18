@@ -354,6 +354,59 @@
   margin: 0 0 1rem 0;
 }
 
+/* Customer Session Link */
+.sessionHint {
+  font-size: 0.875rem;
+  color: #94a3b8;
+  margin: 0 0 0.75rem 0;
+}
+
+.sessionLinkRow {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.sessionLinkInput {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-family: monospace;
+  font-size: 0.8rem;
+}
+
+.copyButton,
+.openButton {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.copyButton {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
+}
+
+.copyButton:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.openButton {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+}
+
+.openButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
 .metaGrid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
