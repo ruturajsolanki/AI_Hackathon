@@ -1,7 +1,12 @@
-import { Bell, Search, User } from 'lucide-react'
+import { useState } from 'react'
+import { Bell, Search, User, LogOut, ChevronDown } from 'lucide-react'
+import { useAuth } from '../../contexts/AuthContext'
 import styles from './Header.module.css'
 
 export function Header() {
+  const { user, logout } = useAuth()
+  const [showDropdown, setShowDropdown] = useState(false)
+
   return (
     <header className={styles.header} role="banner">
       <div className={styles.search}>
@@ -31,19 +36,35 @@ export function Header() {
         
         <div className={styles.divider} role="separator" aria-orientation="vertical" />
         
-        <button 
-          className={styles.profile}
-          aria-label="User profile menu"
-          title="User profile"
-        >
-          <div className={styles.avatar} aria-hidden="true">
-            <User size={18} />
-          </div>
-          <div className={styles.profileInfo}>
-            <span className={styles.profileName}>Demo User</span>
-            <span className={styles.profileRole}>Administrator</span>
-          </div>
-        </button>
+        <div className={styles.profileWrapper}>
+          <button 
+            className={styles.profile}
+            aria-label="User profile menu"
+            title="User profile"
+            onClick={() => setShowDropdown(!showDropdown)}
+          >
+            <div className={styles.avatar} aria-hidden="true">
+              <User size={18} />
+            </div>
+            <div className={styles.profileInfo}>
+              <span className={styles.profileName}>{user?.fullName || 'User'}</span>
+              <span className={styles.profileRole}>{user?.role === 'admin' ? 'Administrator' : 'User'}</span>
+            </div>
+            <ChevronDown size={16} className={styles.chevron} />
+          </button>
+          
+          {showDropdown && (
+            <div className={styles.dropdown}>
+              <div className={styles.dropdownHeader}>
+                <span className={styles.dropdownEmail}>{user?.email}</span>
+              </div>
+              <button className={styles.dropdownItem} onClick={logout}>
+                <LogOut size={16} />
+                <span>Sign Out</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   )
