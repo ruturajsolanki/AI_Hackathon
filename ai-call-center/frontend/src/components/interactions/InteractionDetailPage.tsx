@@ -1,14 +1,27 @@
 /**
  * Interaction Detail Page
  * 
- * Displays full details of a single interaction including
- * messages and agent decisions.
+ * Displays full interaction details with unified conversation timeline.
+ * Shows messages and agent decisions inline, highlights escalation events.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { fetchInteractionDetail, InteractionDetail, MessageItem, DecisionItem } from '../../services/apiClient'
+import { 
+  fetchInteractionDetail, 
+  InteractionDetail, 
+  MessageItem, 
+  DecisionItem 
+} from '../../services/apiClient'
 import styles from './InteractionDetailPage.module.css'
+
+// Unified timeline event type
+interface TimelineEvent {
+  id: string
+  type: 'message' | 'decision' | 'escalation'
+  timestamp: string
+  data: MessageItem | DecisionItem
+}
 
 export function InteractionDetailPage() {
   const { interactionId } = useParams<{ interactionId: string }>()
@@ -16,7 +29,6 @@ export function InteractionDetailPage() {
   const [interaction, setInteraction] = useState<InteractionDetail | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'messages' | 'decisions'>('messages')
 
   useEffect(() => {
     if (!interactionId) return
@@ -39,6 +51,56 @@ export function InteractionDetailPage() {
     loadDetail()
   }, [interactionId])
 
+  // Create unified timeline from messages and decisions
+  const timeline = useMemo(() => {
+    if (!interaction) return []
+
+    const events: TimelineEvent[] = []
+
+    // Add messages
+    interaction.messages.forEach((msg) => {
+      events.push({
+        id: msg.messageId,
+        type: 'message',
+        timestamp: msg.timestamp,
+        data: msg,
+      })
+    })
+
+    // Add decisions
+    interaction.decisions.forEach((dec) => {
+      // Check if this is an escalation decision
+      const isEscalation = 
+        dec.agentType === 'escalation' && 
+        (dec.summary.toLowerCase().includes('escalat') || 
+         dec.summary.toLowerCase().includes('human') ||
+         dec.summary.toLowerCase().includes('ticket'))
+
+      events.push({
+        id: dec.decisionId,
+        type: isEscalation ? 'escalation' : 'decision',
+        timestamp: dec.timestamp,
+        data: dec,
+      })
+    })
+
+    // Sort by timestamp
+    events.sort((a, b) => 
+      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    )
+
+    return events
+  }, [interaction])
+
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString)
+    return new Intl.DateTimeFormat('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }).format(date)
+  }
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
     return new Intl.DateTimeFormat('en-US', {
@@ -47,7 +109,6 @@ export function InteractionDetailPage() {
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
-      second: '2-digit',
     }).format(date)
   }
 
@@ -58,43 +119,102 @@ export function InteractionDetailPage() {
     return `${mins}m ${secs}s`
   }
 
-  const getStatusBadge = (status: string) => {
-    const statusMap: Record<string, { label: string; variant: string }> = {
-      initiated: { label: 'Active', variant: 'info' },
-      in_progress: { label: 'In Progress', variant: 'warning' },
-      completed: { label: 'Completed', variant: 'success' },
-      escalated: { label: 'Escalated', variant: 'danger' },
-      abandoned: { label: 'Abandoned', variant: 'muted' },
-    }
-    const config = statusMap[status] || { label: status, variant: 'muted' }
-    return (
-      <span className={`${styles.badge} ${styles[config.variant]}`}>
-        {config.label}
-      </span>
-    )
-  }
-
-  const getAgentBadge = (agentType: string) => {
-    const agentMap: Record<string, { label: string; color: string }> = {
-      primary: { label: 'Primary', color: '#3b82f6' },
-      supervisor: { label: 'Supervisor', color: '#8b5cf6' },
-      escalation: { label: 'Escalation', color: '#f59e0b' },
-    }
-    const config = agentMap[agentType] || { label: agentType, color: '#6b7280' }
-    return (
-      <span 
-        className={styles.agentBadge} 
-        style={{ backgroundColor: `${config.color}20`, color: config.color }}
-      >
-        {config.label}
-      </span>
-    )
-  }
-
   const getConfidenceColor = (confidence: number) => {
     if (confidence >= 0.8) return '#10b981'
     if (confidence >= 0.6) return '#f59e0b'
     return '#ef4444'
+  }
+
+  const getAgentIcon = (agentType: string) => {
+    switch (agentType) {
+      case 'primary': return '🤖'
+      case 'supervisor': return '👁️'
+      case 'escalation': return '⚡'
+      default: return '⚙️'
+    }
+  }
+
+  const getAgentLabel = (agentType: string) => {
+    switch (agentType) {
+      case 'primary': return 'Primary Agent'
+      case 'supervisor': return 'Supervisor'
+      case 'escalation': return 'Escalation Handler'
+      default: return agentType
+    }
+  }
+
+  const renderMessageEvent = (msg: MessageItem) => {
+    const isCustomer = msg.role === 'customer'
+    const isSystem = msg.role === 'system'
+
+    return (
+      <div className={`${styles.messageEvent} ${styles[msg.role]}`}>
+        <div className={styles.messageAvatar}>
+          {isCustomer ? '👤' : isSystem ? '⚙️' : '🤖'}
+        </div>
+        <div className={styles.messageBody}>
+          <div className={styles.messageHeader}>
+            <span className={styles.messageSender}>
+              {isCustomer ? 'Customer' : isSystem ? 'System' : 'AI Agent'}
+            </span>
+            <span className={styles.messageTime}>{formatTime(msg.timestamp)}</span>
+          </div>
+          <div className={styles.messageContent}>{msg.content}</div>
+          {(msg.intent || msg.confidence !== null) && (
+            <div className={styles.messageMetadata}>
+              {msg.intent && (
+                <span className={styles.intentTag}>
+                  Intent: {msg.intent.replace(/_/g, ' ')}
+                </span>
+              )}
+              {msg.confidence !== null && (
+                <span 
+                  className={styles.confidenceTag}
+                  style={{ color: getConfidenceColor(msg.confidence) }}
+                >
+                  {(msg.confidence * 100).toFixed(0)}% confidence
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const renderDecisionEvent = (dec: DecisionItem, isEscalation: boolean) => {
+    return (
+      <div className={`${styles.decisionEvent} ${isEscalation ? styles.escalationEvent : ''}`}>
+        <div className={styles.decisionIcon}>
+          {isEscalation ? '🚨' : getAgentIcon(dec.agentType)}
+        </div>
+        <div className={styles.decisionBody}>
+          <div className={styles.decisionHeader}>
+            <span className={styles.decisionAgent}>
+              {isEscalation ? 'Escalation Triggered' : getAgentLabel(dec.agentType)}
+            </span>
+            <span className={styles.decisionTime}>{formatTime(dec.timestamp)}</span>
+          </div>
+          <div className={styles.decisionContent}>
+            <span className={styles.decisionSummary}>{dec.summary}</span>
+            <div className={styles.decisionStats}>
+              <span 
+                className={styles.confidencePill}
+                style={{ 
+                  backgroundColor: `${getConfidenceColor(dec.confidence)}20`,
+                  color: getConfidenceColor(dec.confidence),
+                }}
+              >
+                {(dec.confidence * 100).toFixed(0)}%
+              </span>
+              <span className={styles.processingTime}>
+                ⚡ {dec.processingTimeMs}ms
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (isLoading) {
@@ -121,159 +241,91 @@ export function InteractionDetailPage() {
 
   return (
     <div className={styles.container}>
-      {/* Back Button */}
-      <button className={styles.backButton} onClick={() => navigate('/interactions')}>
-        ← Back to Interactions
-      </button>
-
       {/* Header */}
       <header className={styles.header}>
-        <div className={styles.headerMain}>
-          <h1 className={styles.title}>
-            <code>{interaction.interactionId.substring(0, 8).toUpperCase()}</code>
-          </h1>
-          {getStatusBadge(interaction.status)}
+        <button className={styles.backButton} onClick={() => navigate('/interactions')}>
+          ← Back
+        </button>
+        <div className={styles.headerInfo}>
+          <div className={styles.headerTop}>
+            <h1 className={styles.title}>
+              <code>{interaction.interactionId.substring(0, 8).toUpperCase()}</code>
+            </h1>
+            <span className={`${styles.statusBadge} ${styles[interaction.status]}`}>
+              {interaction.status.replace(/_/g, ' ')}
+            </span>
+            {interaction.wasEscalated && (
+              <span className={styles.escalatedBadge}>
+                🚨 Escalated
+              </span>
+            )}
+          </div>
+          <div className={styles.headerMeta}>
+            <span>{interaction.channel === 'voice' ? '🎙️' : '💬'} {interaction.channel}</span>
+            <span>•</span>
+            <span>{formatDate(interaction.startedAt)}</span>
+            <span>•</span>
+            <span>{formatDuration(interaction.durationSeconds)}</span>
+            <span>•</span>
+            <span>{interaction.messages.length} messages</span>
+          </div>
         </div>
-        <p className={styles.subtitle}>
-          {interaction.channel === 'voice' ? '🎙️' : '💬'} {interaction.channel} call
-          {interaction.wasEscalated && ' • Escalated to human'}
-        </p>
       </header>
 
-      {/* Metadata */}
-      <div className={styles.metadata}>
-        <div className={styles.metaItem}>
-          <span className={styles.metaLabel}>Started</span>
-          <span className={styles.metaValue}>{formatDate(interaction.startedAt)}</span>
+      {/* Summary Cards */}
+      <div className={styles.summaryCards}>
+        <div className={styles.summaryCard}>
+          <div className={styles.summaryLabel}>Total Messages</div>
+          <div className={styles.summaryValue}>{interaction.messages.length}</div>
         </div>
-        {interaction.endedAt && (
-          <div className={styles.metaItem}>
-            <span className={styles.metaLabel}>Ended</span>
-            <span className={styles.metaValue}>{formatDate(interaction.endedAt)}</span>
+        <div className={styles.summaryCard}>
+          <div className={styles.summaryLabel}>Agent Decisions</div>
+          <div className={styles.summaryValue}>{interaction.decisions.length}</div>
+        </div>
+        <div className={styles.summaryCard}>
+          <div className={styles.summaryLabel}>Duration</div>
+          <div className={styles.summaryValue}>{formatDuration(interaction.durationSeconds)}</div>
+        </div>
+        <div className={styles.summaryCard}>
+          <div className={styles.summaryLabel}>Resolution</div>
+          <div className={styles.summaryValue}>
+            {interaction.resolutionSummary || (interaction.wasEscalated ? 'Escalated' : 'In Progress')}
           </div>
-        )}
-        <div className={styles.metaItem}>
-          <span className={styles.metaLabel}>Duration</span>
-          <span className={styles.metaValue}>{formatDuration(interaction.durationSeconds)}</span>
         </div>
-        <div className={styles.metaItem}>
-          <span className={styles.metaLabel}>Messages</span>
-          <span className={styles.metaValue}>{interaction.messages.length}</span>
-        </div>
-        <div className={styles.metaItem}>
-          <span className={styles.metaLabel}>Decisions</span>
-          <span className={styles.metaValue}>{interaction.decisions.length}</span>
-        </div>
-        {interaction.resolutionSummary && (
-          <div className={styles.metaItem}>
-            <span className={styles.metaLabel}>Resolution</span>
-            <span className={styles.metaValue}>{interaction.resolutionSummary}</span>
-          </div>
-        )}
       </div>
 
-      {/* Tabs */}
-      <div className={styles.tabs}>
-        <button
-          className={`${styles.tab} ${activeTab === 'messages' ? styles.activeTab : ''}`}
-          onClick={() => setActiveTab('messages')}
-        >
-          Messages ({interaction.messages.length})
-        </button>
-        <button
-          className={`${styles.tab} ${activeTab === 'decisions' ? styles.activeTab : ''}`}
-          onClick={() => setActiveTab('decisions')}
-        >
-          Agent Decisions ({interaction.decisions.length})
-        </button>
+      {/* Timeline */}
+      <div className={styles.timelineSection}>
+        <h2 className={styles.sectionTitle}>Conversation Timeline</h2>
+        <div className={styles.timeline}>
+          {timeline.length === 0 ? (
+            <div className={styles.emptyState}>
+              No events recorded for this interaction
+            </div>
+          ) : (
+            timeline.map((event) => (
+              <div key={event.id} className={styles.timelineItem}>
+                <div className={styles.timelineLine} />
+                {event.type === 'message' 
+                  ? renderMessageEvent(event.data as MessageItem)
+                  : renderDecisionEvent(event.data as DecisionItem, event.type === 'escalation')
+                }
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
-      {/* Content */}
-      <div className={styles.content}>
-        {activeTab === 'messages' && (
-          <div className={styles.messagesContainer}>
-            {interaction.messages.length === 0 ? (
-              <div className={styles.emptyState}>No messages in this interaction</div>
-            ) : (
-              interaction.messages.map((message: MessageItem) => (
-                <div
-                  key={message.messageId}
-                  className={`${styles.message} ${styles[message.role]}`}
-                >
-                  <div className={styles.messageHeader}>
-                    <span className={styles.messageRole}>
-                      {message.role === 'customer' ? '👤 Customer' : 
-                       message.role === 'agent' ? '🤖 AI Agent' : '⚙️ System'}
-                    </span>
-                    <span className={styles.messageTime}>
-                      {formatDate(message.timestamp)}
-                    </span>
-                  </div>
-                  <div className={styles.messageContent}>{message.content}</div>
-                  {(message.intent || message.confidence) && (
-                    <div className={styles.messageMeta}>
-                      {message.intent && (
-                        <span className={styles.intent}>Intent: {message.intent}</span>
-                      )}
-                      {message.confidence !== null && (
-                        <span 
-                          className={styles.confidence}
-                          style={{ color: getConfidenceColor(message.confidence) }}
-                        >
-                          Confidence: {(message.confidence * 100).toFixed(0)}%
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
+      {/* Escalation Alert (if applicable) */}
+      {interaction.wasEscalated && (
+        <div className={styles.escalationAlert}>
+          <div className={styles.alertIcon}>🚨</div>
+          <div className={styles.alertContent}>
+            <strong>This interaction was escalated</strong>
+            <p>The AI determined this case required human intervention based on customer request or complexity.</p>
           </div>
-        )}
-
-        {activeTab === 'decisions' && (
-          <div className={styles.decisionsContainer}>
-            {interaction.decisions.length === 0 ? (
-              <div className={styles.emptyState}>No agent decisions recorded</div>
-            ) : (
-              interaction.decisions.map((decision: DecisionItem) => (
-                <div key={decision.decisionId} className={styles.decision}>
-                  <div className={styles.decisionHeader}>
-                    {getAgentBadge(decision.agentType)}
-                    <span className={styles.decisionTime}>
-                      {formatDate(decision.timestamp)}
-                    </span>
-                  </div>
-                  <div className={styles.decisionSummary}>{decision.summary}</div>
-                  <div className={styles.decisionMeta}>
-                    <div className={styles.confidenceBar}>
-                      <span className={styles.confidenceLabel}>Confidence</span>
-                      <div className={styles.confidenceTrack}>
-                        <div
-                          className={styles.confidenceFill}
-                          style={{
-                            width: `${decision.confidence * 100}%`,
-                            backgroundColor: getConfidenceColor(decision.confidence),
-                          }}
-                        />
-                      </div>
-                      <span 
-                        className={styles.confidenceValue}
-                        style={{ color: getConfidenceColor(decision.confidence) }}
-                      >
-                        {(decision.confidence * 100).toFixed(0)}%
-                      </span>
-                    </div>
-                    <span className={styles.processingTime}>
-                      ⚡ {decision.processingTimeMs}ms
-                    </span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }
