@@ -7,13 +7,15 @@ import {
   Settings,
   Headphones,
   Zap,
-  Code2
+  Code2,
+  Ticket
 } from 'lucide-react'
 import styles from './Sidebar.module.css'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', description: 'View analytics overview' },
   { to: '/demo', icon: MessageSquare, label: 'Live Demo', description: 'Interactive call simulation' },
+  { to: '/tickets', icon: Ticket, label: 'Tickets', description: 'View escalated calls' },
   { to: '/interactions', icon: Headphones, label: 'Interactions', description: 'View call history' },
   { to: '/agents', icon: Users, label: 'Agents', description: 'View AI agents' },
   { to: '/agent-programming', icon: Code2, label: 'Agent Studio', description: 'Configure agent prompts and LLM settings' },

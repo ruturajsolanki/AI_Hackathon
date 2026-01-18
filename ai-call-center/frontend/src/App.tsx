@@ -8,6 +8,8 @@ import { AgentsPage } from './components/agents/AgentsPage'
 import { AgentProgrammingPage } from './components/agent-programming/AgentProgrammingPage'
 import { AnalyticsPage } from './components/analytics/AnalyticsPage'
 import { SettingsPage } from './components/settings/SettingsPage'
+import { TicketsDashboard } from './components/tickets/TicketsDashboard'
+import { LiveSession } from './components/session/LiveSession'
 import { LoginPage } from './components/auth/LoginPage'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 
@@ -60,6 +62,8 @@ function AppRoutes() {
         <Route path="agent-programming" element={<AgentProgrammingPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="tickets" element={<TicketsDashboard />} />
+        <Route path="session/:sessionId" element={<LiveSession />} />
       </Route>
     </Routes>
   )

@@ -13,6 +13,7 @@ from app.api.agents import router as agents_router
 from app.api.config import router as config_router
 from app.api.agent_config import router as agent_config_router
 from app.api.auth import router as auth_router
+from app.api.tickets import router as tickets_router
 
 router = APIRouter()
 
@@ -24,6 +25,7 @@ router.include_router(history_router)
 router.include_router(agents_router)
 router.include_router(config_router)
 router.include_router(agent_config_router)
+router.include_router(tickets_router)
 
 
 @router.get("/", tags=["API"])

@@ -876,6 +876,33 @@ class CallOrchestrator:
         if should_escalate:
             final_phase = OrchestrationPhase.ESCALATION_HANDOFF
             phases_completed.append(OrchestrationPhase.ESCALATION_HANDOFF)
+            
+            # Create a ticket for human agent pickup
+            try:
+                from app.api.tickets import create_ticket_from_escalation, TicketPriority
+                
+                # Determine priority based on escalation decision
+                priority = TicketPriority.MEDIUM
+                if escalation_decision and escalation_decision.priority <= 2:
+                    priority = TicketPriority.HIGH
+                if escalation_decision and escalation_decision.priority <= 1:
+                    priority = TicketPriority.CRITICAL
+                
+                create_ticket_from_escalation(
+                    interaction_id=state.interaction_id,
+                    escalation_reason=escalation_decision.escalation_reason.value if escalation_decision else "low_confidence",
+                    issue_summary=primary_output.decision_summary or "Customer issue requiring human attention",
+                    priority=priority,
+                    customer_id=state.customer_id,
+                    detected_intent=primary_output.detected_intent.value if primary_output.detected_intent else None,
+                    detected_emotion=primary_output.detected_emotion.value if primary_output.detected_emotion else None,
+                    ai_attempts=state.turn_count,
+                    last_customer_message=input_text,
+                )
+                logger.info(f"Ticket created for escalated interaction {state.interaction_id}")
+            except Exception as e:
+                logger.error(f"Failed to create ticket: {e}")
+                
         elif should_respond:
             final_phase = OrchestrationPhase.RESPONSE_DELIVERY
             phases_completed.append(OrchestrationPhase.RESPONSE_DELIVERY)
