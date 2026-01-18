@@ -130,6 +130,8 @@ Result: Seamless handoff with full context
 
 ### 5a. High-Level Architecture
 
+> **📊 Professional Diagram Available:** See `docs/diagrams/system_architecture.puml` for a complete PlantUML diagram that can be rendered as PNG/SVG.
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         FRONTEND (React + Vite)                      │
@@ -244,7 +246,25 @@ Result: Seamless handoff with full context
 
 ## 7. User Experience and Workflow
 
-### Customer Journey Diagram
+### 📊 PlantUML Diagrams (Professional Format)
+
+The following professional diagrams are available in `docs/diagrams/`:
+
+| Diagram | File | Description |
+|---------|------|-------------|
+| **Customer Journey** | `customer_journey.puml` | End-to-end interaction flow from call start to resolution/escalation |
+| **System Architecture** | `system_architecture.puml` | Full system architecture with components and connections |
+| **Agent Sequence** | `agent_sequence.puml` | Message processing pipeline through all AI agents |
+
+**To render PlantUML diagrams:**
+1. **Online:** Paste code into [PlantUML Web Server](https://www.plantuml.com/plantuml/uml)
+2. **VS Code:** Install "PlantUML" extension, then Alt+D to preview
+3. **IntelliJ:** Install PlantUML plugin
+4. **Export:** Use `plantuml diagram.puml -tpng` to generate PNG
+
+---
+
+### Customer Journey Diagram (Text Version)
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐

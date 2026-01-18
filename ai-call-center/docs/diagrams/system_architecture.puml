@@ -1,0 +1,180 @@
+@startuml System_Architecture
+!theme cerulean-outline
+skinparam backgroundColor #1a1a2e
+skinparam defaultFontColor #e8e8e8
+skinparam defaultFontSize 11
+
+skinparam component {
+    BackgroundColor #2d2d44
+    BorderColor #6366f1
+    FontColor #e8e8e8
+}
+
+skinparam package {
+    BackgroundColor #1e1e30
+    BorderColor #4b5563
+    FontColor #a5b4fc
+}
+
+skinparam database {
+    BackgroundColor #1e3a5f
+    BorderColor #06b6d4
+    FontColor #e8e8e8
+}
+
+skinparam cloud {
+    BackgroundColor #2d3748
+    BorderColor #10b981
+    FontColor #e8e8e8
+}
+
+skinparam note {
+    BackgroundColor #422006
+    BorderColor #f59e0b
+    FontColor #fcd34d
+}
+
+title <size:22>**AI-Powered Digital Call Center**</size>\n<size:14>System Architecture</size>
+
+' Frontend Layer
+package "Frontend (React + Vite + TypeScript)" as frontend #1e1e30 {
+    component "Call Simulator\n🎙️ Voice/Chat" as call_sim
+    component "Interactions\n📋 History" as interactions
+    component "Analytics\n📊 Dashboard" as analytics
+    component "Agent Studio\n⚙️ Config" as agent_studio
+    component "Tickets\n🎫 Escalations" as tickets
+    
+    component "API Client" as api_client
+    component "Web Speech API\n(STT/TTS)" as speech
+}
+
+' API Gateway
+package "Backend (FastAPI + Python)" as backend #1e1e30 {
+    
+    package "API Layer" as api_layer {
+        component "/interactions" as api_int
+        component "/config" as api_config
+        component "/analytics" as api_analytics
+        component "/tickets" as api_tickets
+        component "/agents" as api_agents
+    }
+    
+    package "Orchestration" as orchestration {
+        component "Call Orchestrator\n🎯 Lifecycle Manager" as orchestrator
+    }
+    
+    package "AI Agents" as agents #2d2d44 {
+        component "🤖 Primary Agent\n• Intent Detection\n• Emotion Assessment\n• Response Generation" as primary
+        component "👁️ Supervisor Agent\n• Quality Review\n• Compliance Check\n• Tone Validation" as supervisor
+        component "⚡ Escalation Agent\n• Routing Decision\n• Ticket Creation\n• Handoff Context" as escalation
+    }
+    
+    package "Services" as services {
+        component "Knowledge Base\n📚 Semantic Search" as kb
+        component "Context Store\n💾 Conversation Memory" as context
+        component "Metrics Engine\n📈 Analytics" as metrics
+        component "Audit Logger\n📝 Compliance" as audit
+    }
+    
+    package "LLM Integration" as llm_layer {
+        component "LLM Client\nInterface" as llm_client
+    }
+}
+
+' External LLM Providers
+cloud "LLM Providers" as llm_cloud {
+    component "OpenAI\nGPT-4o" as openai
+    component "Google\nGemini" as gemini
+    component "Ollama\n(Local)" as ollama
+}
+
+' Database Layer
+database "Persistence" as persistence {
+    component "Supabase\n(PostgreSQL)" as supabase
+    component "MongoDB" as mongodb
+    component "SQLite\n(Dev)" as sqlite
+}
+
+' Data Files
+package "Knowledge Base Files" as data_files #2d3748 {
+    component "orders.csv" as orders
+    component "products.csv" as products
+    component "customers.csv" as customers
+    component "knowledge_base.csv" as kb_csv
+    component "faqs.csv" as faqs
+}
+
+' Connections - Frontend to Backend
+call_sim --> api_client
+interactions --> api_client
+analytics --> api_client
+agent_studio --> api_client
+tickets --> api_client
+speech --> call_sim
+
+api_client --> api_int : HTTPS
+api_client --> api_config
+api_client --> api_analytics
+api_client --> api_tickets
+api_client --> api_agents
+
+' API to Orchestrator
+api_int --> orchestrator
+api_config --> llm_client
+api_tickets --> orchestrator
+
+' Orchestrator to Agents
+orchestrator --> primary
+primary --> supervisor
+supervisor --> escalation
+
+' Agents to Services
+primary --> kb
+primary --> context
+supervisor --> context
+escalation --> context
+orchestrator --> metrics
+orchestrator --> audit
+
+' LLM Connections
+primary --> llm_client
+supervisor --> llm_client
+llm_client --> openai
+llm_client --> gemini
+llm_client --> ollama
+
+' Knowledge Base to Data
+kb --> orders
+kb --> products
+kb --> customers
+kb --> kb_csv
+kb --> faqs
+
+' Persistence
+orchestrator --> persistence
+context --> persistence
+metrics --> persistence
+audit --> persistence
+
+' Notes
+note right of agents
+  **Multi-Agent Pipeline**
+  Primary → Supervisor → Escalation
+  
+  Each agent has specific role
+  Safety rules never bypassed
+end note
+
+note bottom of llm_cloud
+  **Vendor Agnostic**
+  Switch providers without
+  code changes
+end note
+
+note right of kb
+  **Semantic Search**
+  sentence-transformers
+  (all-MiniLM-L6-v2)
+end note
+
+@enduml

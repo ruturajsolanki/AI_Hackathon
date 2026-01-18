@@ -1,0 +1,138 @@
+@startuml Customer_Journey_Flow
+!theme cerulean-outline
+skinparam backgroundColor #1a1a2e
+skinparam defaultFontColor #e8e8e8
+skinparam defaultFontSize 12
+skinparam ArrowColor #6366f1
+skinparam ArrowThickness 2
+
+skinparam activity {
+    BackgroundColor #2d2d44
+    BorderColor #6366f1
+    FontColor #e8e8e8
+    DiamondBackgroundColor #2d2d44
+    DiamondBorderColor #f59e0b
+}
+
+skinparam note {
+    BackgroundColor #1e3a5f
+    BorderColor #06b6d4
+    FontColor #e8e8e8
+}
+
+title <size:20>**AI Call Center - Customer Journey**</size>\n<size:12>End-to-End Interaction Flow</size>
+
+|#2d2d44| Customer |
+|#1e3a5f| AI System |
+|#2d3748| Human Agent |
+
+|Customer|
+start
+:📞 **Start Call**
+(Voice or Chat);
+
+|AI System|
+:🤖 **Greeting**
+"Hello! Thank you for calling.
+How can I help you today?";
+
+|Customer|
+:💬 **State Issue**
+"I want to check on my order ORD10024";
+
+|AI System|
+:🎙️ **Process Voice/Text**
+• Speech-to-Text (if voice)
+• Waveform Visualization
+• "AI is thinking..." indicator;
+
+:🧠 **Primary Agent Analysis**
+━━━━━━━━━━━━━━━━━━━━━━━━
+**Intent Detection:** order_status
+**Emotion:** neutral
+**Confidence:** 95%
+━━━━━━━━━━━━━━━━━━━━━━━━;
+
+:🔍 **Knowledge Base Search**
+• Semantic search (embeddings)
+• Order lookup: ORD10024
+• Found: SHIPPED, Tracking: 1Z999...;
+
+:👁️ **Supervisor Review**
+• Quality check: ✓ Passed
+• Compliance: ✓ Compliant
+• Tone: ✓ Appropriate;
+
+note right
+  **Fast-Path:**
+  High confidence (>80%)
+  + simple query
+  = Skip LLM review
+end note
+
+:📤 **Deliver Response**
+"Your order is SHIPPED.
+Tracking: 1Z999AA10123456799
+Estimated delivery: Feb 5th"
+
+[Quick Replies: Thanks! | Track it | Something else]
+[Source: Based on Order Database];
+
+|Customer|
+if (Customer Satisfied?) then (yes)
+  :😊 **Express Satisfaction**
+  "That's all I needed, thank you!";
+  
+  |AI System|
+  :✅ **Mark Resolved**
+  • Detect satisfaction keywords
+  • Status: RESOLVED
+  • Generate AI Summary;
+  
+  :📊 **Generate Report**
+  • Summary of conversation
+  • Topics discussed
+  • Sentiment journey
+  • Recommendations
+  
+  📥 Download available;
+  
+  |Customer|
+  stop
+  
+else (no - frustrated)
+  :😤 **Request Escalation**
+  "This is unacceptable!
+  I want to speak to a manager NOW!";
+  
+  |AI System|
+  :⚡ **Escalation Agent**
+  ━━━━━━━━━━━━━━━━━━━━━
+  **Trigger:** Manager request
+  **Emotion:** Frustrated/Angry
+  **Priority:** HIGH
+  ━━━━━━━━━━━━━━━━━━━━━;
+  
+  :🎫 **Create Support Ticket**
+  • Full conversation history
+  • Detected intent & emotion
+  • Customer sentiment journey
+  • Recommended actions;
+  
+  :🔗 **Generate Session URL**
+  Customer & Agent chat links;
+  
+  |Human Agent|
+  :👤 **Agent Accepts Ticket**
+  Views full context;
+  
+  :💬 **Live Chat/Voice Session**
+  Human resolves complex issue;
+  
+  |Customer|
+  :🤝 **Issue Resolved by Human**;
+  stop
+  
+endif
+
+@enduml

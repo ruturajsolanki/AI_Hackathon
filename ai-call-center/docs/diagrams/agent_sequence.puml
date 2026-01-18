@@ -1,0 +1,130 @@
+@startuml Agent_Interaction_Sequence
+!theme cerulean-outline
+skinparam backgroundColor #1a1a2e
+skinparam defaultFontColor #e8e8e8
+
+skinparam sequence {
+    ParticipantBackgroundColor #2d2d44
+    ParticipantBorderColor #6366f1
+    ParticipantFontColor #e8e8e8
+    
+    ArrowColor #6366f1
+    ArrowThickness 2
+    
+    LifeLineBorderColor #4b5563
+    LifeLineBackgroundColor #1e1e30
+    
+    BoxBackgroundColor #1e3a5f
+    BoxBorderColor #06b6d4
+    
+    DividerBackgroundColor #2d3748
+    DividerBorderColor #4b5563
+    DividerFontColor #a5b4fc
+}
+
+skinparam note {
+    BackgroundColor #422006
+    BorderColor #f59e0b
+    FontColor #fcd34d
+}
+
+title <size:20>**AI Agent Interaction Sequence**</size>\n<size:12>Message Processing Pipeline</size>
+
+actor "👤 Customer" as customer #2d2d44
+participant "🌐 Frontend" as frontend #2d2d44
+participant "🔌 API" as api #2d2d44
+participant "🎯 Orchestrator" as orch #1e3a5f
+participant "🤖 Primary\nAgent" as primary #10b981
+participant "👁️ Supervisor\nAgent" as supervisor #f59e0b
+participant "⚡ Escalation\nAgent" as escalation #ef4444
+database "📚 Knowledge\nBase" as kb #06b6d4
+database "🧠 LLM" as llm #8b5cf6
+
+== Call Initiation ==
+
+customer -> frontend : Start Call
+frontend -> api : POST /interactions/start
+api -> orch : create_interaction()
+orch -> orch : Initialize context
+orch --> api : interaction_id
+api --> frontend : { interaction_id, greeting }
+frontend --> customer : "Hello! How can I help you?"
+
+== Message Processing ==
+
+customer -> frontend : "Check order ORD10024"
+frontend -> api : POST /message
+
+api -> orch : process_message(content)
+activate orch #1e3a5f
+
+orch -> orch : Update context store
+
+orch -> primary : process(input)
+activate primary #10b981
+
+primary -> kb : search_solutions(query)
+kb --> primary : Matching solutions
+
+primary -> kb : get_order("ORD10024")
+kb --> primary : Order details
+
+primary -> llm : generate_response(prompt)
+note right of llm
+  **LLM Prompt includes:**
+  • Customer message
+  • Conversation history
+  • Knowledge base context
+  • System instructions
+end note
+llm --> primary : Structured JSON response
+
+primary --> orch : AgentOutput\n(intent, emotion, response, confidence=0.95)
+deactivate primary
+
+alt High Confidence (≥0.85) + Simple Query
+    orch -> orch : **FAST-PATH**\nSkip Supervisor LLM
+    note over orch : Response time: ~12s\n(vs 33s with full review)
+else Standard Review
+    orch -> supervisor : review(primary_output)
+    activate supervisor #f59e0b
+    
+    supervisor -> llm : evaluate_response(prompt)
+    llm --> supervisor : Review result
+    
+    supervisor --> orch : SupervisorReview\n(approved=true, quality=0.92)
+    deactivate supervisor
+end
+
+alt Escalation Needed
+    orch -> escalation : evaluate(supervisor_review)
+    activate escalation #ef4444
+    
+    escalation -> escalation : Check triggers:\n• Low confidence\n• Angry emotion\n• Manager request
+    
+    escalation --> orch : EscalationOutcome\n(type=HUMAN, reason="...")
+    deactivate escalation
+    
+    orch -> orch : Create support ticket
+    orch --> api : { should_escalate: true, ticket_id }
+else No Escalation
+    orch --> api : { response, confidence, suggestions }
+end
+
+deactivate orch
+
+api --> frontend : Response JSON
+frontend --> customer : Display response\n+ Quick replies\n+ Source attribution
+
+== Call End ==
+
+customer -> frontend : End Call
+frontend -> api : POST /interactions/{id}/end
+api -> orch : end_interaction(resolution)
+orch -> orch : Detect satisfaction\n→ Mark RESOLVED
+orch -> orch : Generate summary
+orch --> api : Final state
+api --> frontend : { status: "resolved" }
+frontend --> customer : Call ended\n📊 Report available
+
+@enduml
