@@ -337,7 +337,8 @@ class Settings(BaseSettings):
     
     # CORS (for development)
     ALLOWED_ORIGINS: List[str] = Field(
-        default_factory=lambda: ["http://localhost:3000", "http://localhost:5173"]
+        default_factory=lambda: ["http://localhost:3000", "http://localhost:5173"],
+        validation_alias="CORS_ORIGINS"  # Also accept CORS_ORIGINS env var
     )
     
     # Documentation
@@ -350,6 +351,10 @@ class Settings(BaseSettings):
     @classmethod
     def parse_origins(cls, v):
         """Parse comma-separated origins from env."""
+        # Also check for CORS_ORIGINS env var as fallback
+        import os
+        if v is None or (isinstance(v, list) and len(v) == 0):
+            v = os.environ.get("CORS_ORIGINS", os.environ.get("ALLOWED_ORIGINS", ""))
         if isinstance(v, str):
             return [o.strip() for o in v.split(",") if o.strip()]
         return v or []
