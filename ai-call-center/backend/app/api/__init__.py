@@ -9,6 +9,7 @@ from fastapi import APIRouter
 from app.api.interactions import router as interactions_router
 from app.api.analytics import router as analytics_router
 from app.api.history import router as history_router
+from app.api.agents import router as agents_router
 
 router = APIRouter()
 
@@ -16,6 +17,7 @@ router = APIRouter()
 router.include_router(interactions_router)
 router.include_router(analytics_router)
 router.include_router(history_router)
+router.include_router(agents_router)
 
 
 @router.get("/", tags=["API"])
