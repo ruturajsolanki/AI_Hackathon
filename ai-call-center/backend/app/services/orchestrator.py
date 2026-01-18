@@ -135,6 +135,10 @@ class InteractionState(BaseModel):
     is_escalated: bool = Field(default=False)
     is_completed: bool = Field(default=False)
     requires_human: bool = Field(default=False)
+    ticket_created: bool = Field(default=False)  # Prevent duplicate tickets
+    
+    # Last message for context
+    last_customer_message: Optional[str] = Field(default=None)
     
     # Timing
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -407,6 +411,37 @@ class CallOrchestrator:
                 OrchestrationPhase.INITIALIZED,
                 start_time,
             )
+        
+        # Check if already escalated - return polite message and don't process further
+        if state.is_escalated:
+            logger.info(f"Interaction {interaction_id} already escalated - ignoring new message")
+            
+            # Create a simple response indicating call is being transferred
+            escalation_response = AgentOutput(
+                agent_type=AgentType.ESCALATION,
+                decision_summary="Your call is being transferred to a human agent. Please wait.",
+                proposed_response="Thank you for your patience. Your call has been escalated and a human agent will be with you shortly. Please check your session link to continue the conversation.",
+                confidence_score=1.0,
+                confidence_level=ConfidenceLevel.HIGH,
+                processing_time_ms=0,
+            )
+            
+            return OrchestrationResult(
+                interaction_id=interaction_id,
+                final_phase=OrchestrationPhase.ESCALATION_HANDOFF,
+                phases_completed=[OrchestrationPhase.ESCALATION_HANDOFF],
+                primary_output=escalation_response,
+                supervisor_review=None,
+                escalation_decision=None,
+                should_respond=True,
+                should_escalate=True,  # Already escalated
+                response_text="Thank you for your patience. Your call has been escalated and a human agent will be with you shortly. Please check your session link to continue the conversation.",
+                error=None,
+                processing_time_ms=0,
+            )
+        
+        # Store the last customer message for ticket creation
+        state.last_customer_message = content
         
         try:
             # Step 1: Store customer message
@@ -877,41 +912,45 @@ class CallOrchestrator:
             final_phase = OrchestrationPhase.ESCALATION_HANDOFF
             phases_completed.append(OrchestrationPhase.ESCALATION_HANDOFF)
             
-            # Create a ticket for human agent pickup
-            try:
-                from app.api.tickets import create_ticket_from_escalation, TicketPriority
-                
-                # Determine priority based on escalation decision
-                priority = TicketPriority.MEDIUM
-                if escalation_decision and escalation_decision.priority <= 2:
-                    priority = TicketPriority.HIGH
-                if escalation_decision and escalation_decision.priority <= 1:
-                    priority = TicketPriority.CRITICAL
-                
-                # Get customer_id from interaction if available
-                customer_id = None
-                if state.interaction and hasattr(state.interaction, 'customer_id'):
-                    customer_id = state.interaction.customer_id
-                
-                # Get last customer message from context if available
-                last_message = None
-                if primary_output.context_updates and "last_message" in primary_output.context_updates:
-                    last_message = primary_output.context_updates.get("last_message")
-                
-                create_ticket_from_escalation(
-                    interaction_id=state.interaction_id,
-                    escalation_reason=escalation_decision.escalation_reason.value if escalation_decision else "low_confidence",
-                    issue_summary=primary_output.decision_summary or "Customer issue requiring human attention",
-                    priority=priority,
-                    customer_id=customer_id,
-                    detected_intent=primary_output.detected_intent.value if primary_output.detected_intent else None,
-                    detected_emotion=primary_output.detected_emotion.value if primary_output.detected_emotion else None,
-                    ai_attempts=state.turn_count,
-                    last_customer_message=last_message,
-                )
-                logger.info(f"Ticket created for escalated interaction {state.interaction_id}")
-            except Exception as e:
-                logger.error(f"Failed to create ticket: {e}")
+            # Mark state as escalated to prevent further processing
+            state.is_escalated = True
+            
+            # Only create ticket if not already created (prevent duplicates)
+            if not state.ticket_created:
+                try:
+                    from app.api.tickets import create_ticket_from_escalation, TicketPriority
+                    
+                    # Determine priority based on escalation decision
+                    priority = TicketPriority.MEDIUM
+                    if escalation_decision and escalation_decision.priority <= 2:
+                        priority = TicketPriority.HIGH
+                    if escalation_decision and escalation_decision.priority <= 1:
+                        priority = TicketPriority.CRITICAL
+                    
+                    # Get customer_id from interaction if available
+                    customer_id = None
+                    if state.interaction and hasattr(state.interaction, 'customer_id'):
+                        customer_id = state.interaction.customer_id
+                    
+                    create_ticket_from_escalation(
+                        interaction_id=state.interaction_id,
+                        escalation_reason=escalation_decision.escalation_reason.value if escalation_decision else "low_confidence",
+                        issue_summary=primary_output.decision_summary or "Customer issue requiring human attention",
+                        priority=priority,
+                        customer_id=customer_id,
+                        detected_intent=primary_output.detected_intent.value if primary_output.detected_intent else None,
+                        detected_emotion=primary_output.detected_emotion.value if primary_output.detected_emotion else None,
+                        ai_attempts=state.turn_count,
+                        last_customer_message=state.last_customer_message,  # Use stored message
+                    )
+                    
+                    # Mark ticket as created to prevent duplicates
+                    state.ticket_created = True
+                    logger.info(f"Ticket created for escalated interaction {state.interaction_id}")
+                except Exception as e:
+                    logger.error(f"Failed to create ticket: {e}")
+            else:
+                logger.debug(f"Ticket already created for interaction {state.interaction_id}")
                 
         elif should_respond:
             final_phase = OrchestrationPhase.RESPONSE_DELIVERY
