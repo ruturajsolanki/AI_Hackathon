@@ -330,35 +330,52 @@ export function CallSimulator() {
         await speakResponse(data.responseContent)
       }
 
-      // Handle escalation automatically
+      // Handle escalation with a smooth transition
       if (data.shouldEscalate && !isEscalated) {
-        // IMMEDIATELY stop everything and end call
-        stopSpeech()
+        // Stop listening but transition smoothly
         stopListening()
         setContinuousVoiceMode(false)
         setIsEscalated(true)
-        setIsCallActive(false)
+        
+        // AI acknowledges the escalation politely
+        const transferMessage = "I understand you'd like to speak with a human agent. Let me transfer you now. A support specialist will be with you shortly."
         
         addMessage({
-          role: 'system',
-          content: `⚠️ Escalation triggered: ${data.escalationReason || 'Complex issue detected'}`,
+          role: 'agent',
+          content: transferMessage,
+          metadata: { isTransfer: true },
         })
         
-        addMessage({
-          role: 'system',
-          content: '✅ Call transferred! A ticket has been created. Check the Tickets page.',
+        // Speak the transfer message
+        speak(transferMessage, {
+          rate: 0.95,
+          onEnd: () => {
+            addMessage({
+              role: 'system',
+              content: '📞 Connecting you to a human agent...',
+            })
+          },
         })
         
         // Generate customer session URL
         const sessionUrl = `${window.location.origin}/customer-session/${callId}`
         setCustomerSessionUrl(sessionUrl)
-        setShowEscalationPanel(true)
         
-        // End the call
-        if (callId) {
-          endCall(callId).catch(console.error)
-        }
-        setCallId(null)
+        // Graceful transition with delay
+        setTimeout(() => {
+          addMessage({
+            role: 'system',
+            content: '✅ Transfer complete! A support ticket has been created.',
+          })
+          
+          setShowEscalationPanel(true)
+          setIsCallActive(false)
+          
+          if (callId) {
+            endCall(callId).catch(console.error)
+          }
+          setCallId(null)
+        }, 3000) // 3 second delay for smooth transition
       }
 
     } else {
@@ -455,35 +472,48 @@ export function CallSimulator() {
         }
       }
 
-      // Handle escalation automatically
+      // Handle escalation with smooth transition
       if (data.shouldEscalate && !isEscalated) {
-        // IMMEDIATELY stop everything and end call
-        stopSpeech()
+        // Stop listening but transition smoothly
         stopListening()
         setContinuousVoiceMode(false)
         setIsEscalated(true)
-        setIsCallActive(false)
+        
+        // AI acknowledges the escalation politely
+        const transferMessage = "I understand you'd like to speak with a human agent. Let me transfer you now. A support specialist will be with you shortly."
         
         addMessage({
-          role: 'system',
-          content: `⚠️ Escalation triggered: ${data.escalationReason || 'Complex issue detected'}`,
+          role: 'agent',
+          content: transferMessage,
+          metadata: { isTransfer: true },
         })
         
+        speak(transferMessage, { rate: 0.95 })
+        
         addMessage({
           role: 'system',
-          content: '✅ Call transferred! A ticket has been created. Check the Tickets page.',
+          content: '📞 Connecting you to a human agent...',
         })
         
         // Generate customer session URL
         const sessionUrl = `${window.location.origin}/customer-session/${callId}`
         setCustomerSessionUrl(sessionUrl)
-        setShowEscalationPanel(true)
         
-        // End the call
-        if (callId) {
-          endCall(callId).catch(console.error)
-        }
-        setCallId(null)
+        // Graceful transition with delay
+        setTimeout(() => {
+          addMessage({
+            role: 'system',
+            content: '✅ Transfer complete! A support ticket has been created.',
+          })
+          
+          setShowEscalationPanel(true)
+          setIsCallActive(false)
+          
+          if (callId) {
+            endCall(callId).catch(console.error)
+          }
+          setCallId(null)
+        }, 3000)
       }
 
     } else {
@@ -816,35 +846,48 @@ export function CallSimulator() {
         await speakResponse(data.responseContent)
       }
 
-      // Handle escalation automatically - no manual button needed
+      // Handle escalation with smooth transition
       if (data.shouldEscalate && !isEscalated) {
-        // IMMEDIATELY stop everything and end call
-        stopSpeech()
+        // Stop listening but transition smoothly
         stopListening()
         setContinuousVoiceMode(false)
         setIsEscalated(true)
-        setIsCallActive(false)
+        
+        // AI acknowledges the escalation politely
+        const transferMessage = "I understand you'd like to speak with a human agent. Let me transfer you now. A support specialist will be with you shortly."
         
         addMessage({
-          role: 'system',
-          content: `⚠️ Escalation triggered: ${data.escalationReason || 'Complex issue detected'}`,
+          role: 'agent',
+          content: transferMessage,
+          metadata: { isTransfer: true },
         })
         
+        speak(transferMessage, { rate: 0.95 })
+        
         addMessage({
           role: 'system',
-          content: '✅ Call transferred! A ticket has been created. Check the Tickets page.',
+          content: '📞 Connecting you to a human agent...',
         })
         
         // Generate customer session URL
         const sessionUrl = `${window.location.origin}/customer-session/${callId}`
         setCustomerSessionUrl(sessionUrl)
-        setShowEscalationPanel(true)
         
-        // End the call
-        if (callId) {
-          endCall(callId).catch(console.error)
-        }
-        setCallId(null)
+        // Graceful transition with delay
+        setTimeout(() => {
+          addMessage({
+            role: 'system',
+            content: '✅ Transfer complete! A support ticket has been created.',
+          })
+          
+          setShowEscalationPanel(true)
+          setIsCallActive(false)
+          
+          if (callId) {
+            endCall(callId).catch(console.error)
+          }
+          setCallId(null)
+        }, 3000)
       }
 
     } else {
