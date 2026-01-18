@@ -95,6 +95,10 @@ INTENT_KEYWORDS: Dict[IntentCategory, List[str]] = {
     IntentCategory.GENERAL_INQUIRY: [
         "help", "question", "wondering", "curious", "info"
     ],
+    IntentCategory.FEEDBACK: [
+        "feedback", "suggestion", "improve", "recommend", "love", "great", "amazing",
+        "happy", "satisfied", "that's all", "no more questions"
+    ],
 }
 
 EMOTION_KEYWORDS: Dict[EmotionalState, List[str]] = {
@@ -111,7 +115,9 @@ EMOTION_KEYWORDS: Dict[EmotionalState, List[str]] = {
         "worried", "concerned", "urgent", "asap", "emergency", "critical", "scared"
     ],
     EmotionalState.SATISFIED: [
-        "thank you", "thanks", "great", "perfect", "excellent", "appreciate"
+        "thank you", "thanks", "great", "perfect", "excellent", "appreciate",
+        "happy", "satisfied", "that works", "sounds good", "helpful", "wonderful",
+        "that's all", "all good", "no more questions", "resolved"
     ],
 }
 
@@ -137,8 +143,8 @@ FALLBACK_RESPONSES: Dict[IntentCategory, str] = {
         "and I want to ensure we address your concerns properly."
     ),
     IntentCategory.FEEDBACK: (
-        "Thank you for taking the time to share your feedback. "
-        "We value your input as it helps us improve our services."
+        "Thank you so much! I'm glad I could help you today. "
+        "Is there anything else I can assist you with, or would you like me to close this call?"
     ),
     IntentCategory.ORDER_STATUS: (
         "I can check the status of your order. Let me retrieve the latest "

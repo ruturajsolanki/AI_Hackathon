@@ -242,13 +242,14 @@ class EscalationAgent(BaseAgent):
         Evaluate whether an interaction requires escalation.
         
         Decision flow:
-        1. Check for mandatory escalation triggers
-        2. Evaluate risk-based escalation
-        3. Assess confidence-based escalation
-        4. Check emotional escalation needs
-        5. Determine escalation type
-        6. Assign priority
-        7. Generate handoff context
+        1. Check for customer satisfaction signals (can override escalation)
+        2. Check for mandatory escalation triggers
+        3. Evaluate risk-based escalation
+        4. Assess confidence-based escalation
+        5. Check emotional escalation needs
+        6. Determine escalation type
+        7. Assign priority
+        8. Generate handoff context
         
         Args:
             primary_output: Output from Primary Agent.
@@ -262,6 +263,16 @@ class EscalationAgent(BaseAgent):
         reasoning = ["Initiating escalation evaluation"]
         contributing_factors: List[str] = []
         escalation_history = escalation_history or []
+        
+        # Step 0: Check for customer satisfaction signals
+        customer_satisfied = self._detect_customer_satisfaction(
+            original_input,
+            primary_output,
+            reasoning,
+        )
+        
+        if customer_satisfied:
+            reasoning.append("Customer expressed satisfaction - suppressing low-confidence escalation")
         
         # Step 1: Check mandatory escalation triggers
         mandatory_escalation, mandatory_reason = self._check_mandatory_triggers(
@@ -282,11 +293,17 @@ class EscalationAgent(BaseAgent):
             contributing_factors.append(f"Risk factor: {risk_reason}")
         
         # Step 3: Confidence-based evaluation
-        confidence_escalation, confidence_reason = self._evaluate_confidence_escalation(
-            primary_output,
-            supervisor_review,
-            reasoning,
-        )
+        # Skip confidence-based escalation if customer is satisfied
+        if customer_satisfied:
+            confidence_escalation = False
+            confidence_reason = None
+            reasoning.append("Skipping confidence-based escalation due to customer satisfaction")
+        else:
+            confidence_escalation, confidence_reason = self._evaluate_confidence_escalation(
+                primary_output,
+                supervisor_review,
+                reasoning,
+            )
         
         if confidence_escalation:
             contributing_factors.append(f"Confidence factor: {confidence_reason}")
@@ -311,14 +328,20 @@ class EscalationAgent(BaseAgent):
             contributing_factors.append("Retry attempts exhausted")
         
         # Step 6: Make escalation decision
-        should_escalate = (
-            mandatory_escalation or
-            risk_escalation or
-            confidence_escalation or
-            emotional_escalation or
-            retry_exhausted or
-            not supervisor_review.approved
-        )
+        # If customer is satisfied, only escalate for mandatory or critical issues
+        if customer_satisfied:
+            should_escalate = mandatory_escalation
+            if not should_escalate:
+                reasoning.append("Customer satisfied - no escalation needed")
+        else:
+            should_escalate = (
+                mandatory_escalation or
+                risk_escalation or
+                confidence_escalation or
+                emotional_escalation or
+                retry_exhausted or
+                not supervisor_review.approved
+            )
         
         reasoning.append(
             f"Escalation decision: {'required' if should_escalate else 'not required'}"
@@ -385,6 +408,63 @@ class EscalationAgent(BaseAgent):
             contributing_factors=contributing_factors,
             recommended_response_time=response_time,
         )
+
+    def _detect_customer_satisfaction(
+        self,
+        original_input: AgentInput,
+        primary_output: AgentOutput,
+        reasoning: List[str],
+    ) -> bool:
+        """
+        Detect if customer has expressed satisfaction with the interaction.
+        
+        This prevents unnecessary escalation when the customer is happy.
+        """
+        content_lower = original_input.content.lower()
+        
+        # Satisfaction phrases that indicate the customer is happy
+        satisfaction_phrases = [
+            "i'm happy",
+            "im happy",
+            "i am happy",
+            "that's great",
+            "thats great",
+            "thank you",
+            "thanks",
+            "perfect",
+            "that works",
+            "sounds good",
+            "that's helpful",
+            "thats helpful",
+            "appreciate it",
+            "that's all",
+            "thats all",
+            "no more questions",
+            "all good",
+            "great, thanks",
+            "excellent",
+            "wonderful",
+            "i'm satisfied",
+            "im satisfied",
+            "i am satisfied",
+            "that answers my question",
+            "that's what i needed",
+            "you've been helpful",
+            "issue resolved",
+            "problem solved",
+        ]
+        
+        for phrase in satisfaction_phrases:
+            if phrase in content_lower:
+                reasoning.append(f"Customer satisfaction detected: '{phrase}' found in message")
+                return True
+        
+        # Also check detected emotion from primary agent
+        if primary_output.detected_emotion == EmotionalState.SATISFIED:
+            reasoning.append("Customer satisfaction detected via emotion analysis")
+            return True
+        
+        return False
 
     def _check_mandatory_triggers(
         self,
