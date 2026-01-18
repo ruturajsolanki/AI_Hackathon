@@ -78,6 +78,10 @@ export function CallSimulator() {
     sessionDuration: 0,
   })
   
+  // Escalation state
+  const [showEscalationPanel, setShowEscalationPanel] = useState(false)
+  const [isEscalated, setIsEscalated] = useState(false)
+  
   // Continuous voice mode state
   const [continuousVoiceMode, setContinuousVoiceMode] = useState(true) // Enable by default
   
@@ -600,6 +604,47 @@ export function CallSimulator() {
     }
   }
 
+  // Handle escalation to human agent
+  const handleEscalateToHuman = async () => {
+    // Stop any ongoing speech/listening
+    stopSpeech()
+    if (isListening) stopListening()
+    
+    setIsEscalated(true)
+    setShowEscalationPanel(true)
+    
+    addMessage({
+      role: 'system',
+      content: '🔄 Transferring to human agent... Please hold.',
+    })
+    
+    // Simulate human agent joining after a delay
+    setTimeout(() => {
+      addMessage({
+        role: 'system',
+        content: '✅ A human agent has joined the call. You are now speaking with a live representative.',
+      })
+      
+      // Add a simulated human response
+      setTimeout(() => {
+        addMessage({
+          role: 'agent',
+          content: "Hi there! I'm a human agent. I've reviewed the AI's notes about your issue. How can I help you resolve this today?",
+          metadata: { isHuman: true },
+        })
+      }, 2000)
+    }, 3000)
+  }
+  
+  // Close escalation panel and continue with human
+  const handleAcceptHumanHandoff = () => {
+    setShowEscalationPanel(false)
+    addMessage({
+      role: 'system',
+      content: '📞 You are now connected with a human agent.',
+    })
+  }
+
   const handleEndCall = async () => {
     // Stop any ongoing speech/listening
     stopSpeech()
@@ -607,6 +652,8 @@ export function CallSimulator() {
 
     if (!callId) {
       setIsCallActive(false)
+      setIsEscalated(false)
+      setShowEscalationPanel(false)
       return
     }
 
@@ -617,11 +664,14 @@ export function CallSimulator() {
     setIsLoading(false)
     setIsCallActive(false)
     setCallId(null)
+    setIsEscalated(false)
+    setShowEscalationPanel(false)
 
+    const endStatus = isEscalated ? 'Resolved by human agent' : 'Resolved by AI'
     addMessage({
       role: 'system',
       content: result.success 
-        ? `Call ended. Duration: ${formatDuration(agentState.sessionDuration)}. ${agentState.turnCount} turns processed.`
+        ? `Call ended. ${endStatus}. Duration: ${formatDuration(agentState.sessionDuration)}. ${agentState.turnCount} turns processed.`
         : `Call ended (with error: ${result.error?.message})`,
     })
 
@@ -966,15 +1016,39 @@ export function CallSimulator() {
                   </button>
                 </div>
                 
-                <button 
-                  className={styles.endButton} 
-                  onClick={handleEndCall}
-                  disabled={isLoading}
-                  aria-label="End call"
-                >
-                  <PhoneOff size={18} aria-hidden="true" />
-                  End Call
-                </button>
+                {/* Show escalation button when AI recommends it */}
+                {agentState.shouldEscalate && !isEscalated ? (
+                  <div className={styles.escalationButtons}>
+                    <button 
+                      className={styles.escalateButton} 
+                      onClick={handleEscalateToHuman}
+                      disabled={isLoading}
+                      aria-label="Transfer to human agent"
+                    >
+                      <User size={18} aria-hidden="true" />
+                      Transfer to Human
+                    </button>
+                    <button 
+                      className={styles.endButton} 
+                      onClick={handleEndCall}
+                      disabled={isLoading}
+                      aria-label="End call anyway"
+                    >
+                      <PhoneOff size={18} aria-hidden="true" />
+                      End Call
+                    </button>
+                  </div>
+                ) : (
+                  <button 
+                    className={styles.endButton} 
+                    onClick={handleEndCall}
+                    disabled={isLoading}
+                    aria-label="End call"
+                  >
+                    <PhoneOff size={18} aria-hidden="true" />
+                    End Call
+                  </button>
+                )}
               </div>
             </>
           )}
@@ -1072,7 +1146,12 @@ export function CallSimulator() {
               Escalation Status
             </div>
             <div className={styles.escalationStatus}>
-              {agentState.shouldEscalate ? (
+              {isEscalated ? (
+                <span className={styles.humanConnected}>
+                  <User size={14} />
+                  Connected to Human Agent
+                </span>
+              ) : agentState.shouldEscalate ? (
                 <>
                   <span className={styles.escalationBadge}>
                     <AlertTriangle size={12} />
@@ -1081,6 +1160,14 @@ export function CallSimulator() {
                   <span className={styles.escalationReason}>
                     {agentState.escalationReason}
                   </span>
+                  <button 
+                    className={styles.transferButton}
+                    onClick={handleEscalateToHuman}
+                    disabled={isLoading}
+                  >
+                    <User size={14} />
+                    Transfer Now
+                  </button>
                 </>
               ) : (
                 <span className={styles.noEscalation}>
