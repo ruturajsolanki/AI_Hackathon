@@ -36,8 +36,8 @@ class GeminiConfig(BaseModel):
     """Configuration for Gemini client."""
     
     api_key: Optional[str] = None
-    # Use gemini-pro for free tier compatibility
-    default_model: str = "gemini-2.0-flash"
+    # Use gemini-2.5-flash for best free tier compatibility
+    default_model: str = "gemini-2.5-flash"
     timeout_seconds: float = 60.0
     max_retries: int = 3
     retry_delay_seconds: float = 1.0

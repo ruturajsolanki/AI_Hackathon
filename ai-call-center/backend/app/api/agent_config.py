@@ -500,7 +500,7 @@ async def test_agent_prompt(
             # Use appropriate Gemini model if OpenAI model was specified
             model = request.model
             if model.startswith("gpt"):
-                model = "gemini-2.0-flash"  # Default Gemini model
+                model = "gemini-2.5-flash"  # Default Gemini model
         else:
             from app.integrations.openai_client import OpenAIClient, OpenAIConfig
             client_config = OpenAIConfig(api_key=api_key)

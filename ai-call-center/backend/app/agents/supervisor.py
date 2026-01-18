@@ -29,6 +29,7 @@ from app.agents.prompts import (
     SUPERVISOR_AGENT_SYSTEM_PROMPT,
     build_supervisor_prompt,
 )
+from app.core.json_utils import extract_json_from_llm_response
 from app.core.llm import (
     CompletionRequest,
     CompletionStatus,
@@ -518,7 +519,7 @@ class SupervisorAgent(BaseAgent):
                 system_prompt=SUPERVISOR_AGENT_SYSTEM_PROMPT,
                 config=GenerationConfig(
                     temperature=0.2,  # Low temperature for consistency
-                    max_tokens=600,
+                    max_tokens=1024,  # Increased for complete JSON responses
                     response_format=ResponseFormat.JSON,
                 ),
             )
@@ -551,7 +552,11 @@ class SupervisorAgent(BaseAgent):
         Returns None if parsing fails - triggers fallback.
         """
         try:
-            data = json.loads(content)
+            # Use robust JSON extraction utility
+            data = extract_json_from_llm_response(content)
+            if data is None:
+                logger.warning(f"JSON parse error in supervisor: Could not extract JSON from LLM response")
+                return None
             result = LLMReviewResult.model_validate(data)
             
             return {

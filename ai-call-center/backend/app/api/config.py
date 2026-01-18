@@ -483,7 +483,7 @@ async def _list_gemini_models(api_key: str) -> ModelsListResponse:
         return ModelsListResponse(
             provider="gemini",
             models=models[:15],  # Limit to top 15
-            default_model="gemini-2.0-flash",
+            default_model="gemini-2.5-flash",
         )
 
 

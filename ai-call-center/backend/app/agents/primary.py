@@ -28,6 +28,7 @@ from app.agents.prompts import (
     build_primary_prompt,
     format_conversation_history,
 )
+from app.core.json_utils import extract_json_from_llm_response
 from app.core.llm import (
     CompletionRequest,
     CompletionStatus,
@@ -323,7 +324,7 @@ class PrimaryAgent(BaseAgent):
                 system_prompt=PRIMARY_AGENT_SYSTEM_PROMPT,
                 config=GenerationConfig(
                     temperature=0.3,  # Low temperature for consistency
-                    max_tokens=500,
+                    max_tokens=1024,  # Increased for complete JSON responses
                     response_format=ResponseFormat.JSON,
                 ),
             )
@@ -357,8 +358,11 @@ class PrimaryAgent(BaseAgent):
         Returns None if parsing fails.
         """
         try:
-            # Parse JSON
-            data = json.loads(content)
+            # Use robust JSON extraction utility
+            data = extract_json_from_llm_response(content)
+            if data is None:
+                logger.warning(f"JSON parse error: Could not extract JSON from LLM response")
+                return None
             
             # Validate with Pydantic
             result = LLMAnalysisResult.model_validate(data)
