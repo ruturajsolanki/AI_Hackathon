@@ -1,8 +1,7 @@
 /**
  * Login Page
  * 
- * Authentication page for the AI Call Center.
- * Supports email/password login with demo credentials.
+ * Modern, professional authentication page for the AI Call Center.
  */
 
 import { useState } from 'react'
@@ -16,7 +15,6 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [showPassword, setShowPassword] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -27,20 +25,15 @@ export function LoginPage() {
       const result = await login({ email, password })
       
       if (result.success && result.data) {
-        // Store tokens
         localStorage.setItem('access_token', result.data.accessToken)
         localStorage.setItem('refresh_token', result.data.refreshToken)
-        
-        // Set auth header for future requests
         setAuthToken(result.data.accessToken)
-        
-        // Redirect to dashboard
         navigate('/')
       } else {
-        setError(result.error?.message || 'Login failed. Please check your credentials.')
+        setError(result.error?.message || 'Invalid credentials')
       }
     } catch {
-      setError('An unexpected error occurred. Please try again.')
+      setError('Connection failed. Please try again.')
     }
     
     setIsLoading(false)
@@ -52,100 +45,128 @@ export function LoginPage() {
   }
 
   return (
-    <div className={styles.container}>
-      <div className={styles.loginCard}>
-        {/* Logo */}
-        <div className={styles.logo}>
-          <div className={styles.logoIcon}>⚡</div>
-          <h1 className={styles.logoTitle}>AI Call Center</h1>
-          <p className={styles.logoSubtitle}>Autonomous Agent Platform</p>
-        </div>
-
-        {/* Login Form */}
-        <form onSubmit={handleSubmit} className={styles.form}>
-          <h2 className={styles.formTitle}>Sign In</h2>
-          
-          {error && (
-            <div className={styles.error}>
-              <span>⚠️</span> {error}
-            </div>
-          )}
-
-          <div className={styles.inputGroup}>
-            <label htmlFor="email">Email</label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              required
-              autoComplete="email"
-            />
+    <div className={styles.page}>
+      {/* Left side - Branding */}
+      <div className={styles.branding}>
+        <div className={styles.brandingContent}>
+          <div className={styles.logoMark}>
+            <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+              <rect width="48" height="48" rx="12" fill="url(#gradient)" />
+              <path d="M24 12L34 20V28L24 36L14 28V20L24 12Z" stroke="white" strokeWidth="2" fill="none" />
+              <circle cx="24" cy="24" r="4" fill="white" />
+              <defs>
+                <linearGradient id="gradient" x1="0" y1="0" x2="48" y2="48">
+                  <stop stopColor="#6366f1" />
+                  <stop offset="1" stopColor="#8b5cf6" />
+                </linearGradient>
+              </defs>
+            </svg>
           </div>
-
-          <div className={styles.inputGroup}>
-            <label htmlFor="password">Password</label>
-            <div className={styles.passwordInput}>
-              <input
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                autoComplete="current-password"
-              />
-              <button
-                type="button"
-                className={styles.showPassword}
-                onClick={() => setShowPassword(!showPassword)}
-                tabIndex={-1}
-              >
-                {showPassword ? '👁️' : '👁️‍🗨️'}
-              </button>
+          
+          <h1 className={styles.brandTitle}>AI Call Center</h1>
+          <p className={styles.brandTagline}>Autonomous Agent Platform</p>
+          
+          <div className={styles.features}>
+            <div className={styles.feature}>
+              <span className={styles.featureIcon}>🎯</span>
+              <div>
+                <h3>Intelligent Routing</h3>
+                <p>AI-powered call handling with real-time intent detection</p>
+              </div>
+            </div>
+            <div className={styles.feature}>
+              <span className={styles.featureIcon}>🤖</span>
+              <div>
+                <h3>Autonomous Agents</h3>
+                <p>Three-tier agent system for quality assurance</p>
+              </div>
+            </div>
+            <div className={styles.feature}>
+              <span className={styles.featureIcon}>📊</span>
+              <div>
+                <h3>Real-time Analytics</h3>
+                <p>Track performance, confidence, and resolution rates</p>
+              </div>
             </div>
           </div>
-
-          <button
-            type="submit"
-            className={styles.submitButton}
-            disabled={isLoading}
-          >
-            {isLoading ? 'Signing in...' : 'Sign In'}
-          </button>
-        </form>
-
-        {/* Demo Credentials */}
-        <div className={styles.demoSection}>
-          <div className={styles.divider}>
-            <span>or try the demo</span>
-          </div>
-          
-          <button
-            type="button"
-            className={styles.demoButton}
-            onClick={handleDemoLogin}
-          >
-            🎮 Use Demo Credentials
-          </button>
-          
-          <p className={styles.demoHint}>
-            Demo: <code>demo@example.com</code> / <code>demo123</code>
-          </p>
         </div>
-
-        {/* Footer */}
-        <div className={styles.footer}>
-          <p>Powered by Autonomous AI Agents</p>
+        
+        <div className={styles.brandingFooter}>
+          <p>Enterprise-grade AI for customer service</p>
         </div>
       </div>
 
-      {/* Background decoration */}
-      <div className={styles.bgDecoration}>
-        <div className={styles.bgCircle1} />
-        <div className={styles.bgCircle2} />
-        <div className={styles.bgCircle3} />
+      {/* Right side - Login Form */}
+      <div className={styles.formSide}>
+        <div className={styles.formContainer}>
+          <div className={styles.formHeader}>
+            <h2>Welcome back</h2>
+            <p>Sign in to access your dashboard</p>
+          </div>
+
+          {error && (
+            <div className={styles.error}>
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className={styles.form}>
+            <div className={styles.field}>
+              <label htmlFor="email">Email address</label>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@company.com"
+                required
+                autoComplete="email"
+                autoFocus
+              />
+            </div>
+
+            <div className={styles.field}>
+              <label htmlFor="password">Password</label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
+                required
+                autoComplete="current-password"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className={styles.submitBtn}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <span className={styles.spinner} />
+              ) : (
+                'Sign in'
+              )}
+            </button>
+          </form>
+
+          <div className={styles.divider}>
+            <span>Demo Access</span>
+          </div>
+
+          <button
+            type="button"
+            className={styles.demoBtn}
+            onClick={handleDemoLogin}
+          >
+            Fill Demo Credentials
+          </button>
+          
+          <p className={styles.demoNote}>
+            Use <strong>demo@example.com</strong> with password <strong>demo123</strong>
+          </p>
+        </div>
       </div>
     </div>
   )

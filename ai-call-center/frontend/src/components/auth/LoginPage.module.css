@@ -1,188 +1,232 @@
 /**
- * Login Page Styles
- * Modern, professional login interface
+ * Login Page - Modern Split-Screen Design
  */
 
-.container {
-  min-height: 100vh;
+.page {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
-  padding: var(--spacing-lg);
+  min-height: 100vh;
+  background: #0a0a0f;
+}
+
+/* Left Side - Branding */
+.branding {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 48px;
+  background: linear-gradient(145deg, #0f0f1a 0%, #1a1a2e 100%);
+  border-right: 1px solid rgba(99, 102, 241, 0.1);
   position: relative;
   overflow: hidden;
 }
 
-.loginCard {
-  width: 100%;
-  max-width: 420px;
-  background: rgba(30, 41, 59, 0.8);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(99, 102, 241, 0.2);
-  border-radius: var(--radius-xl);
-  padding: var(--spacing-2xl);
-  box-shadow: 
-    0 25px 50px -12px rgba(0, 0, 0, 0.5),
-    0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+.branding::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle at 30% 30%, rgba(99, 102, 241, 0.08) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+.brandingContent {
   position: relative;
-  z-index: 10;
+  z-index: 1;
 }
 
-/* Logo */
-.logo {
-  text-align: center;
-  margin-bottom: var(--spacing-xl);
+.logoMark {
+  margin-bottom: 24px;
 }
 
-.logoIcon {
-  width: 64px;
-  height: 64px;
-  background: linear-gradient(135deg, var(--color-accent-primary), #8b5cf6);
-  border-radius: var(--radius-lg);
+.brandTitle {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 8px 0;
+  letter-spacing: -0.02em;
+}
+
+.brandTagline {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0 0 48px 0;
+}
+
+.features {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.feature {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.featureIcon {
+  font-size: 1.5rem;
+  width: 48px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2rem;
-  margin: 0 auto var(--spacing-md);
-  box-shadow: 0 10px 40px -10px rgba(99, 102, 241, 0.5);
+  background: rgba(99, 102, 241, 0.1);
+  border-radius: 12px;
+  flex-shrink: 0;
 }
 
-.logoTitle {
-  font-family: var(--font-display);
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--color-text-primary);
+.feature h3 {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #fff;
+  margin: 0 0 4px 0;
+}
+
+.feature p {
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.brandingFooter {
+  position: relative;
+  z-index: 1;
+}
+
+.brandingFooter p {
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.3);
   margin: 0;
 }
 
-.logoSubtitle {
-  font-size: 0.875rem;
-  color: var(--color-text-tertiary);
-  margin: var(--spacing-xs) 0 0 0;
+/* Right Side - Form */
+.formSide {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  background: #0a0a0f;
 }
 
-/* Form */
-.form {
-  margin-bottom: var(--spacing-lg);
+.formContainer {
+  width: 100%;
+  max-width: 380px;
 }
 
-.formTitle {
-  font-size: 1.25rem;
+.formHeader {
+  margin-bottom: 32px;
+}
+
+.formHeader h2 {
+  font-size: 1.75rem;
   font-weight: 600;
-  color: var(--color-text-primary);
-  margin: 0 0 var(--spacing-lg) 0;
-  text-align: center;
+  color: #fff;
+  margin: 0 0 8px 0;
+}
+
+.formHeader p {
+  font-size: 0.9375rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0;
 }
 
 .error {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md);
+  padding: 12px 16px;
   background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: var(--radius-md);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
   color: #f87171;
   font-size: 0.875rem;
-  margin-bottom: var(--spacing-lg);
+  margin-bottom: 24px;
 }
 
-.inputGroup {
-  margin-bottom: var(--spacing-lg);
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
-.inputGroup label {
-  display: block;
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field label {
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--color-text-secondary);
-  margin-bottom: var(--spacing-sm);
+  color: rgba(255, 255, 255, 0.7);
 }
 
-.inputGroup input {
-  width: 100%;
-  padding: var(--spacing-md);
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(99, 102, 241, 0.2);
-  border-radius: var(--radius-md);
-  color: var(--color-text-primary);
-  font-size: 1rem;
+.field input {
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: #fff;
+  font-size: 0.9375rem;
   transition: all 0.2s ease;
 }
 
-.inputGroup input::placeholder {
-  color: var(--color-text-tertiary);
+.field input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
 }
 
-.inputGroup input:focus {
+.field input:focus {
   outline: none;
-  border-color: var(--color-accent-primary);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+  border-color: #6366f1;
+  background: rgba(99, 102, 241, 0.05);
 }
 
-.passwordInput {
-  position: relative;
-}
-
-.passwordInput input {
-  padding-right: 48px;
-}
-
-.showPassword {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: none;
+.submitBtn {
+  margin-top: 8px;
+  padding: 14px 24px;
+  background: #6366f1;
   border: none;
-  font-size: 1.25rem;
-  cursor: pointer;
-  opacity: 0.6;
-  transition: opacity 0.2s;
-}
-
-.showPassword:hover {
-  opacity: 1;
-}
-
-.submitButton {
-  width: 100%;
-  padding: var(--spacing-md) var(--spacing-lg);
-  background: linear-gradient(135deg, var(--color-accent-primary), #8b5cf6);
-  border: none;
-  border-radius: var(--radius-md);
-  color: white;
-  font-size: 1rem;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 0.9375rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 15px -3px rgba(99, 102, 241, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
 }
 
-.submitButton:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 25px -5px rgba(99, 102, 241, 0.5);
+.submitBtn:hover:not(:disabled) {
+  background: #5558e3;
 }
 
-.submitButton:active:not(:disabled) {
-  transform: translateY(0);
-}
-
-.submitButton:disabled {
-  opacity: 0.6;
+.submitBtn:disabled {
+  opacity: 0.7;
   cursor: not-allowed;
 }
 
-/* Demo Section */
-.demoSection {
-  text-align: center;
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .divider {
   display: flex;
   align-items: center;
-  margin: var(--spacing-lg) 0;
+  margin: 32px 0 24px;
 }
 
 .divider::before,
@@ -190,113 +234,87 @@
   content: '';
   flex: 1;
   height: 1px;
-  background: rgba(99, 102, 241, 0.2);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .divider span {
-  padding: 0 var(--spacing-md);
+  padding: 0 16px;
   font-size: 0.8125rem;
-  color: var(--color-text-tertiary);
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
-.demoButton {
+.demoBtn {
   width: 100%;
-  padding: var(--spacing-md);
-  background: rgba(99, 102, 241, 0.1);
-  border: 1px solid rgba(99, 102, 241, 0.3);
-  border-radius: var(--radius-md);
-  color: var(--color-accent-primary);
-  font-size: 0.9375rem;
+  padding: 12px 24px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
-.demoButton:hover {
-  background: rgba(99, 102, 241, 0.2);
-  border-color: rgba(99, 102, 241, 0.5);
+.demoBtn:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.03);
 }
 
-.demoHint {
-  margin-top: var(--spacing-md);
-  font-size: 0.75rem;
-  color: var(--color-text-tertiary);
-}
-
-.demoHint code {
-  background: rgba(99, 102, 241, 0.1);
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
-  font-family: var(--font-mono);
-}
-
-/* Footer */
-.footer {
-  margin-top: var(--spacing-xl);
+.demoNote {
+  margin-top: 16px;
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.4);
   text-align: center;
-  padding-top: var(--spacing-lg);
-  border-top: 1px solid rgba(99, 102, 241, 0.1);
 }
 
-.footer p {
-  font-size: 0.75rem;
-  color: var(--color-text-tertiary);
-  margin: 0;
-}
-
-/* Background Decoration */
-.bgDecoration {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.bgCircle1,
-.bgCircle2,
-.bgCircle3 {
-  position: absolute;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%);
-}
-
-.bgCircle1 {
-  width: 600px;
-  height: 600px;
-  top: -200px;
-  right: -200px;
-}
-
-.bgCircle2 {
-  width: 400px;
-  height: 400px;
-  bottom: -100px;
-  left: -100px;
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.1) 0%, transparent 70%);
-}
-
-.bgCircle3 {
-  width: 300px;
-  height: 300px;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.05) 0%, transparent 70%);
+.demoNote strong {
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 500;
 }
 
 /* Responsive */
+@media (max-width: 900px) {
+  .page {
+    flex-direction: column;
+  }
+
+  .branding {
+    padding: 32px;
+    border-right: none;
+    border-bottom: 1px solid rgba(99, 102, 241, 0.1);
+  }
+
+  .features {
+    display: none;
+  }
+
+  .brandingFooter {
+    display: none;
+  }
+
+  .formSide {
+    padding: 32px;
+  }
+}
+
 @media (max-width: 480px) {
-  .loginCard {
-    padding: var(--spacing-lg);
+  .branding {
+    padding: 24px;
   }
 
-  .logoIcon {
-    width: 56px;
-    height: 56px;
-    font-size: 1.75rem;
+  .brandTitle {
+    font-size: 1.5rem;
   }
 
-  .logoTitle {
-    font-size: 1.25rem;
+  .formSide {
+    padding: 24px;
+  }
+
+  .formHeader h2 {
+    font-size: 1.5rem;
   }
 }
