@@ -219,23 +219,41 @@ class CallOrchestrator:
         
         Priority:
         1. Runtime-configured API key (from /api/config/llm)
-        2. Environment variable (OPENAI_API_KEY)
+        2. Environment variable (OPENAI_API_KEY or GEMINI_API_KEY)
         3. None (agents will use fallback logic)
         
         Returns:
-            OpenAIClient if configured, None otherwise.
+            LLMClient (OpenAI or Gemini) if configured, None otherwise.
         """
         try:
             # Try runtime config first
-            from app.api.config import get_runtime_config
+            from app.api.config import get_runtime_config, LLMProvider
             runtime_config = get_runtime_config()
             
             if runtime_config.is_configured():
-                from app.integrations.openai_client import OpenAIClient, OpenAIConfig
-                config = OpenAIConfig(api_key=runtime_config.get_openai_key())
-                return OpenAIClient(config)
+                api_key = runtime_config.get_api_key()
+                provider = runtime_config.get_provider()
+                
+                if provider == LLMProvider.GEMINI:
+                    from app.integrations.gemini_client import GeminiClient, GeminiConfig
+                    config = GeminiConfig(api_key=api_key)
+                    return GeminiClient(config)
+                else:
+                    from app.integrations.openai_client import OpenAIClient, OpenAIConfig
+                    config = OpenAIConfig(api_key=api_key)
+                    return OpenAIClient(config)
             
-            # Fall back to environment variable
+            # Fall back to environment variables
+            import os
+            
+            # Check for Gemini first
+            gemini_key = os.getenv("GEMINI_API_KEY")
+            if gemini_key:
+                from app.integrations.gemini_client import GeminiClient, GeminiConfig
+                config = GeminiConfig(api_key=gemini_key)
+                return GeminiClient(config)
+            
+            # Then try OpenAI
             from app.integrations.openai_client import OpenAIClient, OpenAIConfig
             env_config = OpenAIConfig.from_env()
             

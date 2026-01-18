@@ -473,11 +473,11 @@ async def test_agent_prompt(
     Test a prompt configuration with a sample input.
     
     Useful for validating prompts before saving.
+    Uses the currently configured LLM provider (OpenAI or Gemini).
     """
     try:
         from datetime import datetime, timezone
-        from app.api.config import get_runtime_config
-        from app.integrations.openai_client import OpenAIClient, OpenAIConfig
+        from app.api.config import get_runtime_config, LLMProvider
         from app.core.llm import CompletionRequest, GenerationConfig, ResponseFormat
         
         runtime_config = get_runtime_config()
@@ -489,9 +489,26 @@ async def test_agent_prompt(
                 error="No LLM API key configured. Add your API key in Settings."
             )
         
-        # Create LLM client
-        client_config = OpenAIConfig(api_key=runtime_config.get_openai_key())
-        client = OpenAIClient(client_config)
+        # Create LLM client based on current provider
+        provider = runtime_config.get_provider()
+        api_key = runtime_config.get_api_key()
+        
+        if provider == LLMProvider.GEMINI:
+            from app.integrations.gemini_client import GeminiClient, GeminiConfig
+            client_config = GeminiConfig(api_key=api_key)
+            client = GeminiClient(client_config)
+            # Use appropriate Gemini model if OpenAI model was specified
+            model = request.model
+            if model.startswith("gpt"):
+                model = "gemini-2.0-flash"  # Default Gemini model
+        else:
+            from app.integrations.openai_client import OpenAIClient, OpenAIConfig
+            client_config = OpenAIConfig(api_key=api_key)
+            client = OpenAIClient(client_config)
+            # Use appropriate OpenAI model if Gemini model was specified
+            model = request.model
+            if model.startswith("gemini"):
+                model = "gpt-4o-mini"  # Default OpenAI model
         
         # Build request
         completion_request = CompletionRequest(
@@ -505,7 +522,7 @@ async def test_agent_prompt(
         )
         
         start_time = datetime.now(timezone.utc)
-        response = await client.complete(completion_request, model=request.model)
+        response = await client.complete(completion_request, model=model)
         end_time = datetime.now(timezone.utc)
         latency_ms = int((end_time - start_time).total_seconds() * 1000)
         
