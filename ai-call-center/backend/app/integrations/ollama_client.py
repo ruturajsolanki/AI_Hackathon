@@ -27,7 +27,7 @@ from app.core.llm import (
     GenerationConfig,
     LLMClient,
     StructuredCompletionResponse,
-    UsageStats,
+    TokenUsage,
 )
 
 logger = logging.getLogger(__name__)
@@ -202,7 +202,7 @@ class OllamaClient(LLMClient):
                     content=content,
                     model=model_name,
                     provider="ollama",
-                    usage=UsageStats(
+                    usage=TokenUsage(
                         prompt_tokens=prompt_tokens,
                         completion_tokens=completion_tokens,
                         total_tokens=prompt_tokens + completion_tokens,
@@ -227,7 +227,7 @@ class OllamaClient(LLMClient):
             content=None,
             model=model_name,
             provider="ollama",
-            usage=UsageStats(),
+            usage=TokenUsage(),
             latency_ms=0,
             timestamp=datetime.now(timezone.utc),
             error_message=last_error,
