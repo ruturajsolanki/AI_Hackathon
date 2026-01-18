@@ -14,7 +14,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
-from app.services.persistent_store import get_store
+from app.persistence.store import get_store
 
 logger = logging.getLogger(__name__)
 
