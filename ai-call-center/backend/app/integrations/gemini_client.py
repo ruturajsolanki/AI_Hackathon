@@ -2,7 +2,7 @@
 Google Gemini LLM Client
 
 Concrete implementation of LLMClient for Google's Gemini API.
-Handles authentication, request formatting, and error handling.
+Uses REST API directly for Python 3.9 compatibility.
 """
 
 import asyncio
@@ -11,6 +11,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, TypeVar
 
+import httpx
 from pydantic import BaseModel
 
 from app.core.llm import (
@@ -27,12 +28,16 @@ from app.core.llm import (
 
 T = TypeVar('T', bound=BaseModel)
 
+# Gemini API base URL - use v1 for stable API
+GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
+
 
 class GeminiConfig(BaseModel):
     """Configuration for Gemini client."""
     
     api_key: Optional[str] = None
-    default_model: str = "gemini-1.5-flash"
+    # Use gemini-pro for free tier compatibility
+    default_model: str = "gemini-2.0-flash"
     timeout_seconds: float = 60.0
     max_retries: int = 3
     retry_delay_seconds: float = 1.0
@@ -60,8 +65,7 @@ class GeminiClient(LLMClient):
     """
     Google Gemini implementation of LLMClient.
     
-    Uses the Google Generative AI SDK for API communication.
-    Handles authentication, retries, and error mapping.
+    Uses the Gemini REST API directly for Python 3.9 compatibility.
     
     Example:
         config = GeminiConfig.from_env()
@@ -73,13 +77,12 @@ class GeminiClient(LLMClient):
         )
     """
 
-    # Supported models
+    # Supported models (free tier compatible)
     SUPPORTED_MODELS = [
-        "gemini-1.5-pro",
-        "gemini-1.5-flash",
-        "gemini-1.5-flash-8b",
-        "gemini-2.0-flash-exp",
-        "gemini-pro",
+        "gemini-2.0-flash",        # Latest free tier model
+        "gemini-1.5-flash-latest", # Latest 1.5 flash
+        "gemini-1.5-pro-latest",   # Latest 1.5 pro
+        "gemini-pro",              # Original Gemini Pro
     ]
 
     def __init__(self, config: Optional[GeminiConfig] = None):
@@ -90,27 +93,15 @@ class GeminiClient(LLMClient):
             config: Configuration object. If None, loads from environment.
         """
         self._config = config or GeminiConfig.from_env()
-        self._client = None
+        self._http_client: Optional[httpx.AsyncClient] = None
 
-    def _get_client(self):
-        """
-        Get or create the Gemini client.
-        
-        Lazy initialization to defer import until needed.
-        """
-        if self._client is None:
-            try:
-                import google.generativeai as genai
-                
-                genai.configure(api_key=self._config.api_key)
-                self._client = genai
-            except ImportError:
-                raise RuntimeError(
-                    "Google Generative AI package not installed. "
-                    "Install with: pip install google-generativeai"
-                )
-        
-        return self._client
+    async def _get_http_client(self) -> httpx.AsyncClient:
+        """Get or create the HTTP client."""
+        if self._http_client is None or self._http_client.is_closed:
+            self._http_client = httpx.AsyncClient(
+                timeout=httpx.Timeout(self._config.timeout_seconds)
+            )
+        return self._http_client
 
     @property
     def provider_name(self) -> str:
@@ -145,14 +136,14 @@ class GeminiClient(LLMClient):
         start_time = datetime.now(timezone.utc)
         model_name = model or self.default_model
         
-        # Build the prompt
-        prompt = self._build_prompt(request)
+        # Build the request payload
+        payload = self._build_request_payload(request)
         
         # Attempt completion with retries
         last_error = None
         for attempt in range(self._config.max_retries):
             try:
-                response = await self._make_request(model_name, prompt, request.config)
+                response = await self._make_request(model_name, payload)
                 
                 # Calculate latency
                 end_time = datetime.now(timezone.utc)
@@ -247,21 +238,42 @@ class GeminiClient(LLMClient):
         Check if the Gemini API is accessible.
         
         Makes a minimal request to verify connectivity.
+        Returns True if key is valid (even if rate-limited).
         """
         try:
-            genai = self._get_client()
+            client = await self._get_http_client()
             
-            # Simple model list call to verify API access
-            model = genai.GenerativeModel(self.default_model)
-            # Quick test prompt
-            response = await asyncio.to_thread(
-                model.generate_content,
-                "Hi",
-                generation_config={"max_output_tokens": 5}
-            )
-            return response is not None
+            # Use a simple generateContent request to verify API access
+            url = f"{GEMINI_API_BASE}/models/{self.default_model}:generateContent"
+            params = {"key": self._config.api_key}
+            payload = {
+                "contents": [{"parts": [{"text": "Hi"}]}],
+                "generationConfig": {"maxOutputTokens": 5}
+            }
             
-        except Exception:
+            response = await client.post(url, params=params, json=payload)
+            
+            # Check if successful
+            if response.status_code == 200:
+                return True
+            
+            # 429 = Rate limited - key is valid but quota exceeded
+            # This is still a valid key, just temporarily limited
+            if response.status_code == 429:
+                print(f"Gemini API key valid but rate-limited (quota exceeded)")
+                return True
+            
+            # 401/403 = Invalid key
+            if response.status_code in (401, 403):
+                print(f"Gemini API key invalid: {response.status_code}")
+                return False
+            
+            # Log other errors for debugging
+            print(f"Gemini health check failed: {response.status_code} - {response.text[:200]}")
+            return False
+            
+        except Exception as e:
+            print(f"Gemini health check error: {str(e)}")
             return False
 
     def estimate_tokens(self, text: str) -> int:
@@ -273,64 +285,79 @@ class GeminiClient(LLMClient):
         # Gemini doesn't expose a public tokenizer, use approximation
         return len(text) // 4
 
-    def _build_prompt(self, request: CompletionRequest) -> str:
-        """Convert request to Gemini prompt format."""
-        parts = []
+    def _build_request_payload(self, request: CompletionRequest) -> Dict[str, Any]:
+        """Build the Gemini API request payload."""
+        contents = []
         
-        # Add system prompt as context
+        # Build messages as conversation
         if request.system_prompt:
-            parts.append(f"[System Instructions]\n{request.system_prompt}\n")
+            # Add system instruction as first user message context
+            contents.append({
+                "role": "user",
+                "parts": [{"text": f"[System Instructions]\n{request.system_prompt}"}]
+            })
+            contents.append({
+                "role": "model",
+                "parts": [{"text": "I understand. I will follow these instructions."}]
+            })
         
         # Add conversation history
         for msg in request.messages:
-            role_prefix = "User" if msg.role.value == "user" else "Assistant"
-            parts.append(f"[{role_prefix}]\n{msg.content}\n")
+            role = "user" if msg.role.value == "user" else "model"
+            contents.append({
+                "role": role,
+                "parts": [{"text": msg.content}]
+            })
         
-        # Add user prompt
-        parts.append(f"[User]\n{request.user_prompt}")
+        # Add current user prompt
+        contents.append({
+            "role": "user",
+            "parts": [{"text": request.user_prompt}]
+        })
         
-        return "\n".join(parts)
-
-    async def _make_request(
-        self, 
-        model_name: str, 
-        prompt: str, 
-        config: GenerationConfig
-    ) -> Any:
-        """Make the API request."""
-        genai = self._get_client()
-        
-        # Configure generation settings
+        # Build generation config
         generation_config = {
-            "temperature": config.temperature,
-            "max_output_tokens": config.max_tokens,
-            "top_p": config.top_p,
+            "temperature": request.config.temperature,
+            "maxOutputTokens": request.config.max_tokens,
+            "topP": request.config.top_p,
         }
         
-        if config.top_k is not None:
-            generation_config["top_k"] = config.top_k
+        if request.config.top_k is not None:
+            generation_config["topK"] = request.config.top_k
         
-        if config.stop_sequences:
-            generation_config["stop_sequences"] = config.stop_sequences
+        if request.config.stop_sequences:
+            generation_config["stopSequences"] = request.config.stop_sequences
         
-        # Create model and generate
-        model = genai.GenerativeModel(
-            model_name,
-            generation_config=generation_config
-        )
+        return {
+            "contents": contents,
+            "generationConfig": generation_config,
+        }
+
+    async def _make_request(self, model_name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Make the API request."""
+        client = await self._get_http_client()
         
-        # Use asyncio.to_thread for the sync API
-        response = await asyncio.to_thread(
-            model.generate_content,
-            prompt
-        )
+        url = f"{GEMINI_API_BASE}/models/{model_name}:generateContent"
+        params = {"key": self._config.api_key}
         
-        return response
+        response = await client.post(url, params=params, json=payload)
+        
+        if response.status_code != 200:
+            error_msg = response.text
+            try:
+                error_data = response.json()
+                if "error" in error_data:
+                    error_msg = error_data["error"].get("message", error_msg)
+            except:
+                pass
+            raise Exception(f"Gemini API error ({response.status_code}): {error_msg}")
+        
+        return response.json()
 
     def _parse_response(
         self,
         request: CompletionRequest,
-        response: Any,
+        response: Dict[str, Any],
         model: str,
         latency_ms: int,
     ) -> CompletionResponse:
@@ -338,18 +365,20 @@ class GeminiClient(LLMClient):
         # Extract content
         content = ""
         try:
-            if response.text:
-                content = response.text
+            candidates = response.get("candidates", [])
+            if candidates:
+                parts = candidates[0].get("content", {}).get("parts", [])
+                if parts:
+                    content = parts[0].get("text", "")
         except Exception:
-            # Handle blocked content or other issues
-            if hasattr(response, 'parts') and response.parts:
-                content = response.parts[0].text
+            pass
         
-        # Estimate usage (Gemini doesn't always provide exact counts)
+        # Extract usage metadata
+        usage_metadata = response.get("usageMetadata", {})
         usage = TokenUsage(
-            prompt_tokens=self.estimate_tokens(request.user_prompt),
-            completion_tokens=self.estimate_tokens(content),
-            total_tokens=self.estimate_tokens(request.user_prompt) + self.estimate_tokens(content),
+            prompt_tokens=usage_metadata.get("promptTokenCount", self.estimate_tokens(request.user_prompt)),
+            completion_tokens=usage_metadata.get("candidatesTokenCount", self.estimate_tokens(content)),
+            total_tokens=usage_metadata.get("totalTokenCount", 0),
         )
         
         # Parse structured output if JSON
@@ -393,10 +422,6 @@ class GeminiClient(LLMClient):
         error_message = str(error)
         error_code = None
         
-        # Try to extract error info
-        if hasattr(error, 'status_code'):
-            error_code = str(error.status_code)
-        
         return CompletionResponse(
             request_id=request.request_id,
             status=status,
@@ -410,7 +435,6 @@ class GeminiClient(LLMClient):
 
     def _map_error_to_status(self, error: Exception) -> CompletionStatus:
         """Map exception to CompletionStatus."""
-        error_type = type(error).__name__
         error_str = str(error).lower()
         
         # Check for rate limiting
@@ -418,7 +442,7 @@ class GeminiClient(LLMClient):
             return CompletionStatus.RATE_LIMITED
         
         # Check for timeout
-        if "timeout" in error_type.lower() or "timeout" in error_str:
+        if "timeout" in error_str:
             return CompletionStatus.TIMEOUT
         
         # Check for content filter
@@ -447,3 +471,8 @@ class GeminiClient(LLMClient):
         ]
         
         return any(pattern in error_str for pattern in retryable_patterns)
+    
+    async def close(self):
+        """Close the HTTP client."""
+        if self._http_client and not self._http_client.is_closed:
+            await self._http_client.aclose()
