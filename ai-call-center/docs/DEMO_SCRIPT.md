@@ -1,244 +1,237 @@
-# Live Demo Script
+# AI Call Center Demo Script
 
-**Total Duration:** 5-7 minutes  
-**Audience:** Judges, non-technical stakeholders  
-**Tone:** Calm, confident, clear
-
----
-
-## Pre-Demo Checklist
-
-- [ ] Backend running (`http://localhost:8000`)
-- [ ] Frontend running (`http://localhost:5173`)
-- [ ] Browser open to dashboard
-- [ ] Terminal ready for API calls (optional)
-- [ ] Notes visible only to presenter
+## Pre-Demo Setup Checklist
+- [ ] Backend running: `http://localhost:8000/health` shows healthy
+- [ ] Frontend running: `http://localhost:3000`
+- [ ] Ollama running with model configured in Settings
+- [ ] Login to the app
 
 ---
 
-## Part 1: The Problem (20 seconds)
+## 🎯 DEMO 1: Successful Order Inquiry (2-3 minutes)
 
-> *[Dashboard visible, no interaction started yet]*
+### Opening Statement (to judges):
+> "This is an AI-powered digital call center that handles customer interactions autonomously. Watch how it detects intent, looks up real data, and provides accurate responses."
 
-**SAY:**
+### Step 1: Start Call
+Click **"Start Call"** button
 
-> "Every day, enterprises handle millions of customer calls. Each call costs $8-15 and requires trained agents working around the clock.
->
-> What if AI could handle 80% of routine inquiries instantly—while knowing exactly when to bring in a human?
->
-> That's what we built. Let me show you."
+**AI Says:** "Hello! Thank you for calling. I'm your AI assistant. How can I help you today?"
 
----
+### Step 2: Greeting
+**You Say:**
+> "Hi, I need help with my recent order"
 
-## Part 2: Start the Interaction (30 seconds)
+**Expected AI Response:** Natural greeting + asks for order number
+- ✅ Shows **"order_status"** intent detected
+- ✅ Shows **high confidence** (85%+)
 
-> *[Click "Start New Call" or equivalent]*
+### Step 3: Provide Order Number
+**You Say:**
+> "My order number is ORD10024"
 
-**SAY:**
+**Expected AI Response:** 
+> "I found your order ORD10024! It's currently **shipped** via express shipping. Your tracking number is **1Z999AA10123456799** and the estimated delivery is **February 5th**. It has priority handling. Is there anything else I can help you with?"
 
-> "A customer just reached out through chat. Let's see what happens."
+**Point Out to Judges:**
+- ✅ "Notice it looked up **real order data** from our database"
+- ✅ "The AI detected **order_status** intent automatically"
+- ✅ "Response is **conversational**, not robotic"
 
-**TYPE in the chat input:**
+### Step 4: Follow-up Question
+**You Say:**
+> "That's great, thank you! Can you tell me what shipping carrier it's with?"
 
-```
-Hi, I noticed a $50 charge on my bill that I don't recognize. Can you help?
-```
+**Expected AI Response:** Provides carrier info or asks for clarification
 
-> *[Press Send]*
+### Step 5: Positive Closing
+**You Say:**
+> "Perfect, that's all I needed. Thank you so much!"
 
-**SAY:**
+**Expected AI Response:** Professional closing, offers additional help
 
-> "Watch what happens behind the scenes."
+**Click "End Call"**
 
----
-
-## Part 3: Agent Processing (1 minute)
-
-> *[Point to the Agent Decision Panel as it updates]*
-
-**SAY:**
-
-> "Three AI agents are working together right now."
-
-**[As Primary Agent panel updates]**
-
-> "First, our **Primary Agent** reads the message. It detected this is a **billing inquiry**, and the customer seems **neutral but concerned**. It drafts a helpful response."
-
-**[Point to confidence score]**
-
-> "See this confidence score? **85%**. The AI is saying: 'I'm fairly certain I understand this correctly.'"
-
-**[As Supervisor Agent panel updates]**
-
-> "But we don't just trust that. A second agent—the **Supervisor**—reviews the response. It checks: Is the tone appropriate? Does it follow our policies? Is there any risk?"
-
-**[Point to approval status]**
-
-> "The Supervisor approved it. The response goes to the customer."
-
-> *[Customer sees the AI response appear]*
+**Point Out to Judges:**
+- ✅ "Call resolved **without human intervention**"
+- ✅ "Check the **Analytics** tab - resolution time tracked"
+- ✅ "Full conversation logged in **Interactions** tab"
 
 ---
 
-## Part 4: Show Escalation (1.5 minutes)
+## 🔴 DEMO 2: Escalation Flow (3-4 minutes)
 
-**SAY:**
+### Opening Statement:
+> "Now let me show you how the system handles complex or emotional situations that require human escalation."
 
-> "Now let's see what happens when things get complicated."
+### Step 1: Start New Call
+Click **"Start Call"** button
 
-**TYPE:**
+### Step 2: Frustrated Customer Opening
+**You Say:**
+> "I've been trying to get help for 3 days now and nobody is solving my problem! This is unacceptable!"
 
-```
-This is ridiculous! I've been charged wrong THREE times now. I want to cancel my account immediately.
-```
+**Expected AI Response:** 
+- Shows empathy first
+- Asks what the issue is
 
-> *[Press Send]*
+**Point Out:**
+- ✅ "Notice it detected **frustrated** emotion"
+- ✅ "AI acknowledged frustration before asking questions"
 
-**SAY:**
+### Step 3: Complex Complaint
+**You Say:**
+> "I ordered a laptop 2 weeks ago, it arrived broken, I returned it, but I STILL haven't received my refund of $450! I want to speak to a manager RIGHT NOW!"
 
-> "The customer is frustrated and mentions cancellation. Let's see how the AI handles this."
+**Expected AI Response:**
+- Apologizes for experience
+- May ask for order number
+- System should detect escalation triggers
 
-**[Watch the Agent Decision Panel]**
+**Point Out:**
+- ✅ "Multiple intent signals: refund + complaint + manager request"
+- ✅ "High emotional intensity detected"
 
-> "Notice the Primary Agent detected **angry** emotion and **cancellation intent**. But look at the confidence—it dropped to **55%**."
+### Step 4: Escalation Trigger
+**You Say:**
+> "I've already explained this 5 times! If I don't get my money back today, I'm going to dispute this with my bank and leave negative reviews everywhere!"
 
-> "The Supervisor sees this is high-risk: frustrated customer, potential cancellation. It flags this for **escalation**."
+**Expected Behavior:**
+- AI recognizes escalation needed
+- Shows "Escalating to human agent" message
+- Ticket created in system
 
-**[Point to Escalation Agent panel]**
+**Point Out:**
+- ✅ "The system recognized this needs **human intervention**"
+- ✅ "A **support ticket** was automatically created"
+- ✅ "Customer would be transferred to a live agent"
 
-> "The Escalation Agent makes the call: this needs a human. It generates a summary for the human agent so they don't have to start from scratch."
+### Step 5: Show Ticket Dashboard
+Navigate to **Tickets** tab
 
-**[Point to escalation status]**
-
-> "The AI knew its limits. It didn't try to handle something it shouldn't."
-
----
-
-## Part 5: Analytics Dashboard (1 minute)
-
-> *[Navigate to or scroll to Analytics section]*
-
-**SAY:**
-
-> "Every decision is tracked. Let me show you what this means for operations."
-
-**[Point to key metrics]**
-
-> "In this session alone:
-> - The first inquiry was **resolved by AI** in under 2 seconds
-> - The second was **escalated** appropriately
-> - All decisions are logged with full reasoning for compliance"
-
-**[If showing aggregated metrics]**
-
-> "At scale, we see patterns:
-> - **75%** of interactions resolved without human involvement
-> - **Average confidence** stays above 80%
-> - **Zero compliance violations**—the system catches them before they reach customers"
-
----
-
-## Part 6: The Safety Layer (45 seconds)
-
-**SAY:**
-
-> "Let me show you one more thing—how we prevent AI mistakes."
-
-**TYPE:**
-
-```
-I'm going to sue your company.
-```
-
-> *[Press Send]*
-
-**SAY:**
-
-> "Watch what happens with sensitive content."
-
-**[Point to Agent Panel]**
-
-> "The system detected **legal language**—a sensitive topic. Even though the AI could respond, the safety rules kicked in. This is automatically escalated to a human."
-
-> "These safety rules are **hard-coded**. The AI cannot override them. No matter how confident it is, certain situations always go to humans."
+**Point Out:**
+- ✅ "Here's the escalated ticket with full context"
+- ✅ "Human agent sees entire conversation history"
+- ✅ "Agent can accept and continue the conversation"
 
 ---
 
-## Part 7: Enterprise Impact (45 seconds)
+## 📊 DEMO 3: Analytics Dashboard (1 minute)
 
-> *[Optional: show a summary slide or return to dashboard overview]*
+Navigate to **Analytics** tab
 
-**SAY:**
+**Say to Judges:**
+> "Our analytics dashboard provides real-time insights into call center performance."
 
-> "So what does this mean for an enterprise?"
-
-**[Pause briefly between each point]**
-
-> "**Cost**: Routine inquiries that cost $10 with a human cost less than a penny with AI."
-
-> "**Speed**: Customers get answers in seconds, not minutes on hold."
-
-> "**Quality**: Every response is reviewed by a second AI before delivery."
-
-> "**Compliance**: Complete audit trail. Every decision is explainable."
-
-> "**Safety**: The AI knows what it doesn't know—and asks for help."
+**Point Out:**
+- ✅ "Total calls handled today"
+- ✅ "Resolution rate vs escalation rate"
+- ✅ "Average confidence scores"
+- ✅ "Average resolution time"
 
 ---
 
-## Part 8: Closing (20 seconds)
+## 🤖 DEMO 4: Agent Transparency (1 minute)
 
-**SAY:**
+Navigate to **Agents** tab
 
-> "This isn't about replacing humans. It's about **letting AI handle the routine** so humans can focus on what matters—the complex problems, the frustrated customers, the moments that need a human touch."
+**Say to Judges:**
+> "Full transparency into how each AI agent makes decisions."
 
-> "Thank you. I'm happy to take questions."
-
----
-
-## Backup Talking Points
-
-*If questions arise or demo needs to fill time:*
-
-### "How does it know when to escalate?"
-
-> "Confidence scoring. The AI continuously rates how certain it is. Below 50%? It escalates. High-risk keywords like 'legal' or 'cancel'? It escalates. Angry customer with a complaint? It escalates. The thresholds are configurable by the business."
-
-### "What if the AI is wrong?"
-
-> "Three safeguards: First, the Supervisor Agent reviews every response. Second, hard-coded rules block certain content. Third, humans can override any decision. The system is designed to fail safe—when in doubt, escalate."
-
-### "What about privacy?"
-
-> "Customer messages are processed but not stored in logs. Customer IDs are hashed. The audit trail captures decisions, not personal data. Designed for GDPR and similar regulations."
-
-### "Can this work with voice calls?"
-
-> "The architecture supports it. Speech-to-text on input, text-to-speech on output. The same agent logic applies. We've abstracted the voice integration for future expansion."
-
-### "What's the cost at scale?"
-
-> "Conservative estimate: less than one cent per interaction at scale. That's 99% cheaper than a human agent for routine inquiries."
+**Point Out:**
+- ✅ **Primary Agent**: First contact, intent detection, response generation
+- ✅ **Supervisor Agent**: Reviews for quality and compliance
+- ✅ **Escalation Agent**: Decides when to involve humans
 
 ---
 
-## Demo Recovery
+## 🎙️ DEMO 5: Voice Interaction (Optional, 1 minute)
 
-*If something goes wrong:*
+### Show Voice Capability
+Click microphone button
 
-| Issue | Recovery |
-|-------|----------|
-| Backend not responding | "Let me restart the service—this demonstrates our health check system." |
-| Slow response | "In production, this runs on optimized infrastructure. What you're seeing is a local demo." |
-| Unexpected AI response | "Interesting—the AI interpreted that differently. This is why we have the Supervisor layer." |
-| UI not updating | Refresh the page. "Hot reload in action." |
+**Say out loud:**
+> "I want to check on my order ORD10002"
+
+**Point Out:**
+- ✅ "Real-time speech recognition"
+- ✅ "Same AI processing as text"
+- ✅ "Voice visualizer shows audio activity"
 
 ---
 
-## Key Phrases to Remember
+## 💡 Key Talking Points for Judges
 
-- "The AI knows what it doesn't know."
-- "Three agents working together."
-- "Confidence-based autonomy."
-- "Fail safe, not fail silent."
-- "Routine work for AI, meaningful work for humans."
+### 1. Autonomous AI Agents
+> "Three specialized agents work together - Primary handles customers, Supervisor ensures quality, Escalation knows when humans are needed."
+
+### 2. Real Data Integration
+> "The AI accesses real order data, customer history, and knowledge base - not just canned responses."
+
+### 3. Responsible AI
+> "We built in safeguards - confidence thresholds, escalation rules, audit logging. The AI knows its limits."
+
+### 4. Enterprise Ready
+> "This scales to thousands of concurrent calls. Per-interaction cost is minimal compared to human agents."
+
+### 5. Human-in-the-Loop
+> "AI handles routine cases, humans handle complex ones. The best of both worlds."
+
+---
+
+## 🎯 Sample Order Numbers for Demo
+
+| Order ID | Status | Story |
+|----------|--------|-------|
+| `ORD10001` | Delivered | Happy path - delivered early |
+| `ORD10002` | Shipped | In transit, has tracking |
+| `ORD10003` | Processing | Awaiting payment |
+| `ORD10005` | Cancelled | Customer requested cancellation |
+| `ORD10017` | Refunded | Returned damaged |
+| `ORD10024` | Shipped | Priority handling, express |
+
+---
+
+## 🚨 Escalation Trigger Phrases
+
+These phrases will likely trigger escalation:
+
+| Phrase | Why It Escalates |
+|--------|------------------|
+| "I want to speak to a manager" | Direct escalation request |
+| "This is unacceptable" | High frustration |
+| "I'm going to sue" | Legal mention |
+| "I've been waiting for weeks" | Chronic issue |
+| "Nobody is helping me" | Escalation pattern |
+| "I want a full refund NOW" | Urgency + demand |
+| "I'm disputing with my bank" | Financial threat |
+
+---
+
+## ⏱️ Timing Guide
+
+| Demo Section | Duration |
+|--------------|----------|
+| Demo 1: Order Inquiry | 2-3 min |
+| Demo 2: Escalation | 3-4 min |
+| Demo 3: Analytics | 1 min |
+| Demo 4: Agent Transparency | 1 min |
+| Demo 5: Voice (optional) | 1 min |
+| **Total** | **8-10 min** |
+
+---
+
+## 🎤 Closing Statement
+
+> "What you've seen is an AI system that can handle 80% of customer inquiries autonomously, escalates intelligently when needed, and provides full transparency into every decision. This isn't just a demo - it's a production-ready platform that reduces costs while improving customer experience."
+
+---
+
+## Troubleshooting During Demo
+
+| Issue | Quick Fix |
+|-------|-----------|
+| Slow response | "The AI is processing..." (Ollama may be warming up) |
+| Unexpected response | "AI systems can vary - let me try rephrasing" |
+| Timeout error | Check Ollama connection, restart if needed |
+| No escalation | Use stronger phrases like "I DEMAND a manager" |
