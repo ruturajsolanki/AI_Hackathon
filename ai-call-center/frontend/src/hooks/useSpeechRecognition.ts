@@ -145,7 +145,9 @@ export function useSpeechRecognition(
     }
 
     recognition.onend = () => {
+      console.log('[SpeechRecognition] Recognition ended')
       setIsListening(false)
+      // Don't clear interim transcript here - let the caller handle it
       
       // Auto-restart if enabled and not manually stopped
       if (autoRestart && !isStoppingRef.current) {
@@ -159,12 +161,14 @@ export function useSpeechRecognition(
     }
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
+      console.log('[SpeechRecognition] onresult event received')
       let interim = ''
       let final = ''
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i]
         const transcriptText = result[0].transcript
+        console.log('[SpeechRecognition] Result:', transcriptText, 'isFinal:', result.isFinal)
 
         if (result.isFinal) {
           final += transcriptText
@@ -173,6 +177,8 @@ export function useSpeechRecognition(
         }
       }
 
+      console.log('[SpeechRecognition] Setting - final:', final, 'interim:', interim)
+      
       if (final) {
         setFinalTranscript(prev => prev + final)
         setTranscript(prev => prev + final)
@@ -202,9 +208,9 @@ export function useSpeechRecognition(
     }
 
     recognition.onspeechend = () => {
-      if (!continuous) {
-        recognition.stop()
-      }
+      // Don't auto-stop - let the user click the mic button to stop
+      // This gives us time to capture the final transcript
+      console.log('[SpeechRecognition] Speech ended')
     }
 
     recognition.onnomatch = () => {
@@ -265,6 +271,7 @@ export function useSpeechRecognition(
   const stopListening = useCallback(() => {
     if (!recognitionRef.current || !isListening) return
 
+    console.log('[SpeechRecognition] stopListening called')
     isStoppingRef.current = true
 
     try {
@@ -274,7 +281,8 @@ export function useSpeechRecognition(
     }
 
     setIsListening(false)
-    setInterimTranscript('')
+    // DON'T clear transcripts here - let the caller grab them first
+    // The caller should call clearTranscript() after using the transcript
   }, [isListening])
 
   // Toggle listening

@@ -139,12 +139,18 @@ export function CallSimulator() {
     }
   }, [speechError, permissionDenied])
 
-  // Track interim transcript for fallback
+  // Update input field with live transcription while listening
   useEffect(() => {
-    if (interimTranscript) {
-      lastInterimRef.current = interimTranscript
+    console.log('[Transcript Effect] isListening:', isListening, 'final:', finalTranscript, 'transcript:', transcript, 'interim:', interimTranscript)
+    if (isListening) {
+      const currentText = finalTranscript || transcript || interimTranscript
+      if (currentText && currentText.trim()) {
+        console.log('[Transcript Effect] Setting input to:', currentText.trim())
+        setInput(currentText.trim())
+        lastInterimRef.current = currentText.trim()
+      }
     }
-  }, [interimTranscript])
+  }, [isListening, interimTranscript, transcript, finalTranscript])
 
   // Stop TTS when call ends
   useEffect(() => {
@@ -220,32 +226,7 @@ export function CallSimulator() {
   // Voice Handlers
   // ---------------------------------------------------------------------------
 
-  const toggleMicrophone = useCallback(() => {
-    if (!isSTTSupported) {
-      setError('Speech recognition is not supported in this browser.')
-      return
-    }
-
-    if (isListening) {
-      stopListening()
-    } else {
-      stopSpeech() // Stop any ongoing TTS
-      clearTranscript()
-      lastTranscriptRef.current = ''
-      startListening()
-    }
-  }, [isSTTSupported, isListening, startListening, stopListening, clearTranscript])
-
-  const toggleTTS = useCallback(() => {
-    if (!ttsEnabled) {
-      setTtsEnabled(true)
-    } else {
-      stopSpeech()
-      setTtsEnabled(false)
-    }
-  }, [ttsEnabled])
-
-  // Handle voice message (from speech recognition)
+  // Handle voice message (from speech recognition) - defined first so other functions can use it
   const handleVoiceMessage = useCallback(async (voiceText: string) => {
     console.log('[handleVoiceMessage] Called with:', voiceText)
     console.log('[handleVoiceMessage] isCallActive:', isCallActive, 'callId:', callId, 'status:', agentState.status)
@@ -333,37 +314,39 @@ export function CallSimulator() {
     }
   }, [callId, isCallActive, agentState.status, addMessage, speakResponse])
 
-  // Auto-send transcribed text when speech ends
-  useEffect(() => {
-    console.log('[Speech Effect] isListening:', isListening, 'transcript:', transcript, 'finalTranscript:', finalTranscript, 'lastInterim:', lastInterimRef.current)
-    
-    if (!isListening) {
-      // Use finalTranscript, or fall back to transcript, or last interim
-      const textToSend = (finalTranscript || transcript || lastInterimRef.current).trim()
-      
-      console.log('[Speech Effect] textToSend:', textToSend, 'lastRef:', lastTranscriptRef.current)
-      
-      if (textToSend && textToSend !== lastTranscriptRef.current) {
-        lastTranscriptRef.current = textToSend
-        
-        console.log('[Speech Effect] Conditions - isCallActive:', isCallActive, 'callId:', callId, 'status:', agentState.status)
-        
-        // Add a small delay to ensure all state is settled
-        const timer = setTimeout(() => {
-          if (isCallActive && callId && agentState.status !== 'processing') {
-            console.log('[Speech Effect] ✅ Sending voice message:', textToSend)
-            handleVoiceMessage(textToSend)
-          } else {
-            console.log('[Speech Effect] ❌ Not sending - conditions not met')
-          }
-          clearTranscript()
-          lastInterimRef.current = ''
-        }, 150)
-        
-        return () => clearTimeout(timer)
-      }
+  const toggleMicrophone = useCallback(() => {
+    if (!isSTTSupported) {
+      setError('Speech recognition is not supported in this browser.')
+      return
     }
-  }, [isListening, transcript, finalTranscript, isCallActive, callId, agentState.status, handleVoiceMessage, clearTranscript])
+
+    if (isListening) {
+      // Stopping - the input already has the text from the effect
+      console.log('[Mic] Stopping. Text in input:', input)
+      stopListening()
+      clearTranscript()
+      // Don't clear input - user will click Send
+    } else {
+      // Starting
+      stopSpeech()
+      clearTranscript()
+      lastInterimRef.current = ''
+      setInput('') // Clear input when starting fresh
+      startListening()
+      console.log('[Mic] Started listening')
+    }
+  }, [isSTTSupported, isListening, startListening, stopListening, clearTranscript, input])
+
+  const toggleTTS = useCallback(() => {
+    if (!ttsEnabled) {
+      setTtsEnabled(true)
+    } else {
+      stopSpeech()
+      setTtsEnabled(false)
+    }
+  }, [ttsEnabled])
+
+  // No auto-send - user will click Send button after voice input
 
   // ---------------------------------------------------------------------------
   // API Handlers
@@ -757,9 +740,9 @@ export function CallSimulator() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder={isListening ? 'Listening...' : 'Type or click mic to speak...'}
+                    placeholder={isListening ? '🎤 Speak now...' : 'Type or click mic to speak...'}
                     className={styles.input}
-                    disabled={agentState.status === 'processing' || agentState.status === 'error' || isListening}
+                    disabled={agentState.status === 'processing' || agentState.status === 'error'}
                     aria-describedby={error ? 'input-error' : undefined}
                   />
                   
@@ -795,8 +778,12 @@ export function CallSimulator() {
                   {/* Send Button */}
                   <button 
                     className={styles.sendButton}
-                    onClick={handleSendMessage}
+                    onClick={() => {
+                      console.log('[Send Button] Clicked! input:', input, 'callId:', callId, 'status:', agentState.status)
+                      handleSendMessage()
+                    }}
                     disabled={!input.trim() || agentState.status === 'processing' || !callId}
+                    title={`input: "${input}", callId: ${callId ? 'yes' : 'no'}, status: ${agentState.status}`}
                     aria-label={isLoading ? 'Sending message...' : 'Send message'}
                   >
                     {isLoading ? <Loader2 size={18} className={styles.spinning} aria-hidden="true" /> : <Send size={18} aria-hidden="true" />}
