@@ -4,6 +4,7 @@ An autonomous AI call center that handles customer inquiries through voice and c
 
 [![Demo Video](https://img.shields.io/badge/Demo-Watch%20on%20Loom-blueviolet?style=for-the-badge&logo=loom)](https://www.loom.com/share/6d098f0c010748d4a483afed996d1822)
 [![Python](https://img.shields.io/badge/Python-3.9+-blue?style=flat-square&logo=python)](https://python.org)
+[![Submission Doc](https://img.shields.io/badge/Submission-Google%20Doc-4285F4?style=for-the-badge&logo=googledocs)](https://docs.google.com/document/d/1vYrlVgmadSyoN9v52olj7cWD8pWwzqnWHwBE92eprTo/edit?usp=sharing)
 [![React](https://img.shields.io/badge/React-18-61dafb?style=flat-square&logo=react)](https://react.dev)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=flat-square&logo=fastapi)](https://fastapi.tiangolo.com)
 
