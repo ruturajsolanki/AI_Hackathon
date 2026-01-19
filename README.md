@@ -3,10 +3,22 @@
 An autonomous AI call center that handles customer inquiries through voice and chat, using multi-agent architecture with intelligent escalation to human agents.
 
 [![Demo Video](https://img.shields.io/badge/Demo-Watch%20on%20Loom-blueviolet?style=for-the-badge&logo=loom)](https://www.loom.com/share/6d098f0c010748d4a483afed996d1822)
+[![Submission Doc](https://img.shields.io/badge/Submission-Google%20Doc-4285F4?style=for-the-badge&logo=googledocs)](https://docs.google.com/document/d/1vYrlVgmadSyoN9v52olj7cWD8pWwzqnWHwBE92eprTo/edit?usp=sharing)
 [![Python](https://img.shields.io/badge/Python-3.9+-blue?style=flat-square&logo=python)](https://python.org)
 [![Submission Doc](https://img.shields.io/badge/Submission-Google%20Doc-4285F4?style=for-the-badge&logo=googledocs)](https://docs.google.com/document/d/1vYrlVgmadSyoN9v52olj7cWD8pWwzqnWHwBE92eprTo/edit?usp=sharing)
 [![React](https://img.shields.io/badge/React-18-61dafb?style=flat-square&logo=react)](https://react.dev)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=flat-square&logo=fastapi)](https://fastapi.tiangolo.com)
+
+---
+
+## 📄 Submission Documents
+
+| Document | Link |
+|----------|------|
+| 📋 **Submission Document** | [WeekendCoders_P1.docx](https://docs.google.com/document/d/1vYrlVgmadSyoN9v52olj7cWD8pWwzqnWHwBE92eprTo/edit?usp=sharing) |
+| 🎬 **Demo Video** | [Watch on Loom](https://www.loom.com/share/6d098f0c010748d4a483afed996d1822) |
+| 🌐 **Live Demo** | [Railway Deployment](https://aihackathon-production-fe.up.railway.app) |
+| 💻 **Source Code** | [GitHub Repository](https://github.com/ruturajsolanki/AI_Hackathon) |
 
 ---
 
