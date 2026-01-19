@@ -50,16 +50,16 @@ Traditional call centers face significant challenges:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    FRONTEND (React + Vite)                   │
+│                    FRONTEND (React + Vite)                  │
 │  Call Simulator │ Analytics │ Interactions │ Agent Studio   │
 └────────────────────────────┬────────────────────────────────┘
                              │ HTTPS/REST
 ┌────────────────────────────┴────────────────────────────────┐
-│                    BACKEND (FastAPI)                         │
+│                    BACKEND (FastAPI)                        │
 │  ┌─────────────────────────────────────────────────────┐    │
-│  │              Call Orchestrator                       │    │
+│  │              Call Orchestrator                      │    │
 │  └──────┬─────────────────┬─────────────────┬──────────┘    │
-│         │                 │                 │                │
+│         │                 │                 │               │
 │  ┌──────┴──────┐  ┌───────┴───────┐  ┌──────┴──────┐        │
 │  │   PRIMARY   │  │  SUPERVISOR   │  │  ESCALATION │        │
 │  │    AGENT    │  │    AGENT      │  │    AGENT    │        │
@@ -67,11 +67,11 @@ Traditional call centers face significant challenges:
 │  │  • Emotion  │  │  • Compliance │  │  • Tickets  │        │
 │  │  • Response │  │  • Tone       │  │  • Handoff  │        │
 │  └─────────────┘  └───────────────┘  └─────────────┘        │
-│                             │                                │
+│                             │                               │
 │  ┌──────────────────────────┴───────────────────────────┐   │
 │  │  Knowledge Base (Semantic) │ LLM Layer │ Persistence │   │
 │  └──────────────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────────┘
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
